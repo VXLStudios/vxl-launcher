@@ -357,6 +357,36 @@ impl ProfileManager {
         self.profiles_path.with_extension("json.migrated")
     }
 
+    /// Renames the live `profiles.json` to `profiles.json.migrated` once SQLite owns profile data.
+    async fn escrow_legacy_profiles_json(&self) -> Result<()> {
+        if !self.profiles_path.exists() {
+            return Ok(());
+        }
+
+        let dest = self.migrated_json_path();
+        if dest.exists() {
+            let stamped = self.profiles_path.with_extension(format!(
+                "json.migrated.{}",
+                Utc::now().format("%Y%m%d_%H%M%S")
+            ));
+            fs::rename(&self.profiles_path, &stamped).await.map_err(AppError::Io)?;
+            info!(
+                "Renamed unused profiles.json to {:?} (escrow file already existed)",
+                stamped
+            );
+            return Ok(());
+        }
+
+        fs::rename(&self.profiles_path, &dest)
+            .await
+            .map_err(AppError::Io)?;
+        info!(
+            "Renamed unused profiles.json to {:?}",
+            dest
+        );
+        Ok(())
+    }
+
     async fn read_migration_source(&self, source: &std::path::Path) -> Result<String> {
         let mut current = source.to_path_buf();
 
@@ -400,6 +430,9 @@ impl ProfileManager {
 
     async fn migrate_if_needed(&self) -> Result<()> {
         if self.store.is_migrated().await? {
+            if let Err(e) = self.escrow_legacy_profiles_json().await {
+                warn!("Could not escrow legacy profiles.json: {}", e);
+            }
             return Ok(());
         }
 
@@ -408,6 +441,9 @@ impl ProfileManager {
                 "The database already holds profiles but was never marked as migrated; adopting them instead of importing over them"
             );
             self.store.mark_migrated().await?;
+            if let Err(e) = self.escrow_legacy_profiles_json().await {
+                warn!("Could not escrow legacy profiles.json: {}", e);
+            }
             return Ok(());
         }
 
@@ -434,7 +470,7 @@ impl ProfileManager {
         let outcome = self.store.import_from_json(&raw).await?;
 
         if source == self.profiles_path {
-            if let Err(e) = fs::rename(&self.profiles_path, self.migrated_json_path()).await {
+            if let Err(e) = self.escrow_legacy_profiles_json().await {
                 warn!("Could not rename profiles.json after importing: {}", e);
             }
         }
@@ -600,7 +636,6 @@ impl ProfileManager {
             // Other functions will use calculate_instance_path_for_profile to resolve it.
             profiles.insert(id, profile);
         }
-        info!("Saving profiles metadata to: {:?}", self.profiles_path);
         self.save_profiles().await?;
         Ok(id)
     }
@@ -3067,19 +3102,22 @@ impl PostInitializationHandler for ProfileManager {
     async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
         info!("ProfileManager: on_state_ready called. Loading profiles...");
         // PRIORITY 0: Create backup BEFORE ANYTHING else (including loading)
-        info!("ProfileManager: Creating pre-load backup of profiles.json...");
-        if self.profiles_path.exists() {
-            match backup_utils::create_backup(&self.profiles_path, Some("profiles"), &self.backup_config).await {
+        if !self.store.is_migrated().await? && self.profiles_path.exists() {
+            info!("ProfileManager: Creating pre-migration backup of profiles.json...");
+            match backup_utils::create_backup(
+                &self.profiles_path,
+                Some("profiles"),
+                &self.backup_config,
+            )
+            .await
+            {
                 Ok(backup_path) => {
-                    info!("ProfileManager: Pre-load backup created: {:?}", backup_path);
+                    info!("ProfileManager: Pre-migration backup created: {:?}", backup_path);
                 }
                 Err(e) => {
-                    warn!("ProfileManager: Failed to create pre-load backup: {}", e);
-                    // Continue anyway - don't fail the whole operation
+                    warn!("ProfileManager: Failed to create pre-migration backup: {}", e);
                 }
             }
-        } else {
-            info!("ProfileManager: profiles.json doesn't exist yet - no backup needed at this stage");
         }
 
         {

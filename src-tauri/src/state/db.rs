@@ -28,46 +28,59 @@ pub fn new_handle() -> DbHandle {
 }
 
 pub fn db_path() -> PathBuf {
-    crate::config::standard_meta_dir().join(DB_FILENAME)
+    LAUNCHER_DIRECTORY.root_dir().join(DB_FILENAME)
 }
 
 pub async fn open_or_reopen(handle: &DbHandle) -> Result<()> {
     let path = db_path();
-    adopt_database_from_custom_dir(&path).await;
+    adopt_database_from_legacy_locations(&path).await;
     open_or_reopen_at(handle, path).await
 }
 
-async fn adopt_database_from_custom_dir(target: &Path) {
-    let legacy = LAUNCHER_DIRECTORY.meta_dir().join(DB_FILENAME);
-    if legacy == target {
-        return;
-    }
+async fn adopt_database_from_legacy_locations(target: &Path) {
     if tokio::fs::try_exists(target).await.unwrap_or(false) {
         return;
     }
-    if !tokio::fs::try_exists(&legacy).await.unwrap_or(false) {
-        return;
-    }
 
-    if let Some(parent) = target.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            warn!("Could not create {:?} to adopt the old database: {}", parent, e);
-            return;
-        }
-    }
+    let mut legacy_locations = vec![
+        crate::config::standard_meta_dir().join(DB_FILENAME),
+        LAUNCHER_DIRECTORY.meta_dir().join(DB_FILENAME),
+    ];
+    legacy_locations.sort();
+    legacy_locations.dedup();
 
-    for suffix in ["", "-wal", "-shm"] {
-        let from = PathBuf::from(format!("{}{}", legacy.to_string_lossy(), suffix));
-        let to = PathBuf::from(format!("{}{}", target.to_string_lossy(), suffix));
-        if !tokio::fs::try_exists(&from).await.unwrap_or(false) {
+    for legacy in legacy_locations {
+        if legacy.as_path() == target {
             continue;
         }
-        if let Err(e) = tokio::fs::rename(&from, &to).await {
-            warn!("Could not move {:?} to {:?}: {}", from, to, e);
+        if !tokio::fs::try_exists(&legacy).await.unwrap_or(false) {
+            continue;
         }
-    }
 
-    info!("Adopted the database from {:?} into {:?}", legacy, target);
+        if let Some(parent) = target.parent() {
+            if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                warn!(
+                    "Could not create {:?} to adopt the old database: {}",
+                    parent, e
+                );
+                return;
+            }
+        }
+
+        for suffix in ["", "-wal", "-shm"] {
+            let from = PathBuf::from(format!("{}{}", legacy.to_string_lossy(), suffix));
+            let to = PathBuf::from(format!("{}{}", target.to_string_lossy(), suffix));
+            if !tokio::fs::try_exists(&from).await.unwrap_or(false) {
+                continue;
+            }
+            if let Err(e) = tokio::fs::rename(&from, &to).await {
+                warn!("Could not move {:?} to {:?}: {}", from, to, e);
+            }
+        }
+
+        info!("Adopted the database from {:?} into {:?}", legacy, target);
+        return;
+    }
 }
 
 pub async fn open_or_reopen_at(handle: &DbHandle, path: PathBuf) -> Result<()> {
