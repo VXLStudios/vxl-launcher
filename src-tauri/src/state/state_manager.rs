@@ -19,6 +19,7 @@ static LAUNCHER_STATE: OnceCell<Arc<State>> = OnceCell::const_new();
 pub struct State {
     // Basic state properties will be added here
     pub initialized: bool, // This flag now signifies full post-init completion
+    pub db: crate::state::db::DbHandle,
     pub profile_manager: ProfileManager,
     pub event_state: EventState,
     pub process_manager: ProcessManager,
@@ -43,12 +44,17 @@ impl State {
                 let event_state = EventState::new(Some(app.clone()));
                 let minecraft_account_manager_v2 = MinecraftAuthStore::new().await?;
                 let skin_manager = SkinManager::new(default_skins_path())?;
-                let profile_manager = ProfileManager::new(LAUNCHER_DIRECTORY.root_dir().join("profiles.json"))?;
+                let db = crate::state::db::new_handle();
+                let profile_manager = ProfileManager::new(
+                    LAUNCHER_DIRECTORY.root_dir().join("profiles.json"),
+                    db.clone(),
+                )?;
                 let process_manager = ProcessManager::new(default_processes_path(), app.clone()).await?;
 
                 log::info!("State::init - Primary initialization of managers complete (Phase 1). Constructing State struct with initialized: false.");
                 Ok::<Arc<State>, AppError>(Arc::new(Self {
                     initialized: true,
+                    db,
                     profile_manager,
                     event_state,
                     process_manager,
@@ -70,6 +76,9 @@ impl State {
             .on_state_ready(app.clone())
             .await?;
         log::info!("State::init - ConfigManager post-initialization complete.");
+
+        crate::state::db::open_or_reopen(&initial_state_arc.db).await?;
+        log::info!("State::init - app.db opened.");
 
         let loaded_config = initial_state_arc.config_manager.get_config().await;
 

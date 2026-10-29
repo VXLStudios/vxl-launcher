@@ -10,12 +10,21 @@ const VERSIONS_DIR: &str = "versions";
 
 pub struct MinecraftClientDownloadService {
     base_path: PathBuf,
+    verify_hashes: bool,
 }
 
 impl MinecraftClientDownloadService {
     pub fn new() -> Self {
         let base_path = LAUNCHER_DIRECTORY.meta_dir().join(VERSIONS_DIR);
-        Self { base_path }
+        Self {
+            base_path,
+            verify_hashes: false,
+        }
+    }
+
+    pub fn with_verify_hashes(mut self, verify_hashes: bool) -> Self {
+        self.verify_hashes = verify_hashes;
+        self
     }
 
     pub async fn download_client(
@@ -30,11 +39,15 @@ impl MinecraftClientDownloadService {
 
         info!("Downloading client jar for version: {}", version_id);
 
-        // Use the new centralized download utility with size verification
-        let config = DownloadConfig::new()
-            .with_size(client_info.size as u64)  // Size verification prevents corruption
-            .with_streaming(true)  // Client JARs are large files
-            .with_retries(3);  // Built-in retry logic for network issues
+        let mut config = DownloadConfig::new()
+            .with_size(client_info.size as u64)
+            .with_hash_existing_files(self.verify_hashes)
+            .with_streaming(true)
+            .with_retries(3);
+
+        if self.verify_hashes && !client_info.sha1.is_empty() {
+            config = config.with_sha1(client_info.sha1.clone());
+        }
 
         DownloadUtils::download_file(&client_info.url, &target_path, config).await?;
 

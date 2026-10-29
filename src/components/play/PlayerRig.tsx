@@ -18,6 +18,7 @@ import { useQualitySettingsStore } from "../../store/quality-settings-store";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVanillaCapeStore } from "../../store/useVanillaCapeStore";
 import { useStreamerModeStore } from "../../store/streamer-mode-store";
+import { isWebGLAvailable } from "../../lib/webgl-utils";
 
 const NO_ACCOUNT_SKIN_URL = "/skins/steve.png";
 const RIG_SHADOW = "drop-shadow(5px 10px 5px rgba(0,0,0,0.75))";
@@ -67,7 +68,8 @@ export function PlayerRig({ playerName, outline, className }: PlayerRigProps) {
   const { textureUrl, variant, loading: skinLoading } = useActiveSkinTexture();
   const { cosmetics: equippedCosmetics } = useEquippedCosmetics(activeAccount?.id);
   const idleEmote = useIdleEmote();
-  const skinRenderer3d = useQualitySettingsStore((s) => s.skinRenderer3d);
+  const skinRenderer3dSetting = useQualitySettingsStore((s) => s.skinRenderer3d);
+  const skinRenderer3d = skinRenderer3dSetting && isWebGLAvailable();
   const isWindowFocused = useWindowFocus();
   const streamerMode = useStreamerModeStore((state) => state.enabled);
   const hasAccount = !!activeAccount;

@@ -35,15 +35,20 @@ export function ProfileDetailViewV2Wrapper() {
       return;
     }
 
-    const foundProfile = profiles.find((p) => p.id === profileId);
-    if (foundProfile) {
-      setFetchedProfile(foundProfile);
-      setProfileLoading(false);
+    // Wait for the initial list fetch; do not abort lookup when a background refresh sets loading.
+    if (!profilesLoaded) {
       return;
     }
 
-    // Wait for the initial list fetch; do not abort lookup when a background refresh sets loading.
-    if (!profilesLoaded) {
+    const foundProfile = profiles.find((p) => p.id === profileId);
+    const listHasFullMods =
+      foundProfile != null &&
+      (foundProfile.mods.length > 0 ||
+        (foundProfile.mod_count ?? 0) === 0);
+
+    if (foundProfile && listHasFullMods) {
+      setFetchedProfile(foundProfile);
+      setProfileLoading(false);
       return;
     }
 

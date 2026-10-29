@@ -29,4 +29,7 @@ export interface LauncherConfig {
   multiple_log_windows: boolean;
   use_browser_based_login: boolean;
   streamer_mode: boolean;
+  log_level: LogLevel;
 }
+
+export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";

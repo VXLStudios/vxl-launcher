@@ -169,6 +169,31 @@ export function GeneralTab() {
           />
         </SettingRow>
         <SettingRow
+          label="Log level"
+          description="Launcher log verbosity. VXL_LOG_LEVEL in the environment overrides this."
+          searchKeywords={kw("log", "debug", "trace", "verbosity")}
+          disabled={saving}
+        >
+          <select
+            className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+            value={tempConfig?.log_level ?? "debug"}
+            disabled={saving}
+            onChange={(e) =>
+              tempConfig &&
+              setTempConfig({
+                ...tempConfig,
+                log_level: e.target.value as import("../../../types/launcherConfig").LogLevel,
+              })
+            }
+          >
+            {(["error", "warn", "info", "debug", "trace"] as const).map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+        </SettingRow>
+        <SettingRow
           label="Open Logs After Starting"
           description="Automatically open the game logs window when launching Minecraft."
           searchKeywords={kw("logs", "log", "open logs")}

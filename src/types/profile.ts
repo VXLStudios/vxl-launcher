@@ -201,7 +201,9 @@ export interface Profile {
   last_played: string | null;
   settings: ProfileSettings;
   state: ProfileState;
+  // List payloads from get_all_profiles_and_last_played ship mods as [] for IPC size; use mod_count there.
   mods: Mod[];
+  mod_count?: number;
   disabled_norisk_mods_detailed: NoriskModIdentifier[];
   source_standard_profile_id: string | null;
   group: string | null;

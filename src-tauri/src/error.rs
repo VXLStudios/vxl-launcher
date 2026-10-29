@@ -67,6 +67,12 @@ pub enum AppError {
     #[error("Other error: {0}")]
     Other(String),
 
+    #[error("Database unavailable: {0}")]
+    DatabaseUnavailable(String),
+
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+
     #[error("Event state was not properly initialized")]
     EventStateNotInitialized,
 

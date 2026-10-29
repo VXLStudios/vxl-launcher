@@ -60,6 +60,31 @@ pub struct LauncherConfig {
     pub use_browser_based_login: bool,
     #[serde(default)]
     pub streamer_mode: bool,
+    #[serde(default)]
+    pub log_level: LogLevel,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    #[default]
+    Debug,
+    Trace,
+}
+
+impl From<LogLevel> for log::LevelFilter {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Trace => log::LevelFilter::Trace,
+        }
+    }
 }
 
 fn default_config_version() -> u32 {
@@ -125,6 +150,7 @@ impl Default for LauncherConfig {
             multiple_log_windows: default_multiple_log_windows(),
             use_browser_based_login: default_use_browser_based_login(),
             streamer_mode: false,
+            log_level: LogLevel::default(),
         }
     }
 }
@@ -355,6 +381,7 @@ impl ConfigManager {
                 && current.multiple_log_windows == new_config.multiple_log_windows
                 && current.use_browser_based_login == new_config.use_browser_based_login
                 && current.streamer_mode == new_config.streamer_mode
+                && current.log_level == new_config.log_level
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -481,6 +508,7 @@ impl ConfigManager {
                     multiple_log_windows: new_config.multiple_log_windows,
                     use_browser_based_login: new_config.use_browser_based_login,
                     streamer_mode: new_config.streamer_mode,
+                    log_level: new_config.log_level,
                 };
 
                 true
@@ -489,6 +517,7 @@ impl ConfigManager {
 
         // Save the updated config if needed
         if should_save {
+            apply_log_level(new_config.log_level);
             self.save_config().await?;
 
             // Update cache
@@ -516,9 +545,24 @@ impl PostInitializationHandler for ConfigManager {
     async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
         info!("ConfigManager: on_state_ready called. Loading configuration...");
         self.load_config_internal().await?;
+        apply_log_level(self.config.read().await.log_level);
         info!("ConfigManager: Successfully loaded configuration in on_state_ready.");
         Ok(())
     }
+}
+
+fn apply_log_level(level: LogLevel) {
+    if let Some(env_level) = crate::logging::env_log_level() {
+        if env_level != log::LevelFilter::from(level) {
+            log::debug!(
+                "Config log level {:?} ignored, VXL_LOG_LEVEL={} is set",
+                level,
+                env_level
+            );
+        }
+        return;
+    }
+    crate::logging::set_log_level(level.into());
 }
 
 pub fn default_config_path() -> PathBuf {

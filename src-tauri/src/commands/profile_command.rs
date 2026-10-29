@@ -1990,8 +1990,21 @@ pub async fn list_profile_screenshots(
 
 // --- New DTO and Command for All Profiles and Last Played ---
 #[derive(Serialize, Debug, Clone)]
+pub struct ProfileListEntry {
+    #[serde(flatten)]
+    profile: Profile,
+    mod_count: usize,
+}
+
+impl From<(Profile, usize)> for ProfileListEntry {
+    fn from((profile, mod_count): (Profile, usize)) -> Self {
+        Self { profile, mod_count }
+    }
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct AllProfilesAndLastPlayed {
-    all_profiles: Vec<Profile>,
+    all_profiles: Vec<ProfileListEntry>,
     last_played_profile_id: Option<Uuid>,
 }
 
@@ -2001,7 +2014,7 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
     let state = State::get().await?;
 
     // Fetch User Profiles (includes editable copies of standard profiles)
-    let user_profiles = state.profile_manager.list_profiles().await?;
+    let user_profiles = state.profile_manager.list_profiles_without_mods().await?;
 
     // Handle `last_played_profile_id`
     let mut launcher_config = state.config_manager.get_config().await;
@@ -2010,7 +2023,7 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
 
     // Validate existing last_played_profile_id
     if let Some(id_to_check) = effective_last_played_id {
-        let exists = user_profiles.iter().any(|p| p.id == id_to_check);
+        let exists = user_profiles.iter().any(|(p, _)| p.id == id_to_check);
         if !exists {
             info!(
                 "Last played profile ID {} no longer exists. Marking for reset.",
@@ -2025,7 +2038,7 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
         info!("Last played profile ID is not set or invalid. Attempting to set a default.");
 
         // Use first user profile as default (standard profiles no longer available)
-        let new_default_id = user_profiles.first().map(|p| p.id);
+        let new_default_id = user_profiles.first().map(|(p, _)| p.id);
 
         // Check if the determined new_default_id is different from what's in the original config.
         // This ensures we only write to config if there's an actual change.
@@ -2052,7 +2065,10 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
     }
 
     Ok(AllProfilesAndLastPlayed {
-        all_profiles: user_profiles,
+        all_profiles: user_profiles
+            .into_iter()
+            .map(ProfileListEntry::from)
+            .collect(),
         last_played_profile_id: effective_last_played_id,
     })
 }

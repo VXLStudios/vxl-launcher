@@ -38,3 +38,5 @@ vite.config.ts.timestamp-*
 /.tauri
 /reference-codebase
 /conceptAssets
+/.agents
+/.cursor

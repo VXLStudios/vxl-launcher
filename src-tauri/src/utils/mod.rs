@@ -4,6 +4,7 @@ pub mod disk_space_utils; // Disk space utility for checking available space bef
 pub mod download_utils; // Central download utility for robust file downloads
 pub mod file_utils; // Utilities for file operations like reading archives
 pub mod hash_utils;
+pub mod log_redaction;
 pub mod java_detector; // Java detector to find Java installations
 pub mod mc_utils; // Utilities for Minecraft-related operations
 pub mod migration_utils; // Migration utilities for profile and config updates

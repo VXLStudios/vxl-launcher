@@ -3,6 +3,7 @@ import {
   SnapshotRenderer,
   type SnapshotRequest,
 } from "vxl-skin-renderer/snapshot";
+import { isWebGLAvailable, renderFlatSkin } from "./webgl-utils";
 
 const RENDERER_VERSION =
   typeof __SKIN_RENDERER_VERSION__ === "string"
@@ -174,6 +175,11 @@ export async function getSkinPreview(
     quality: options.quality,
     ...given,
   };
+
+  if (!isWebGLAvailable()) {
+    return renderFlatSkin(framed.textureUrl);
+  }
+
   const key = await skinPreviewKey(framed, options);
 
   const known = resolved.get(key);

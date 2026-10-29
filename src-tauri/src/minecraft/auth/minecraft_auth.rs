@@ -53,6 +53,14 @@ pub struct PublicAccount {
     pub expires_at: DateTime<Utc>,
 }
 
+fn publish_log_redactions(accounts: &[Credentials]) {
+    let pairs: Vec<(String, String)> = accounts
+        .iter()
+        .map(|account| (account.username.clone(), account.id.to_string()))
+        .collect();
+    crate::utils::security_utils::set_known_accounts(&pairs);
+}
+
 impl From<&Credentials> for PublicAccount {
     fn from(credentials: &Credentials) -> Self {
         Self {
@@ -311,6 +319,7 @@ impl MinecraftAuthStore {
                 self.load_device_token_from_keychain().await?
             };
 
+            publish_log_redactions(&credentials);
             {
                 let mut accounts = self.accounts.write().await;
                 *accounts = credentials;

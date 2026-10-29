@@ -7,9 +7,32 @@ use futures::AsyncReadExt;
 use image::{imageops::FilterType, DynamicImage, ImageFormat};
 use log::debug;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tokio::fs::File;
+
+pub async fn write_atomic<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
+    let path = path.as_ref().to_path_buf();
+    let contents = contents.as_ref().to_vec();
+
+    tokio::task::spawn_blocking(move || write_atomic_sync(&path, &contents))
+        .await
+        .map_err(|e| AppError::Other(format!("Atomic write task failed: {e}")))?
+}
+
+pub fn write_atomic_sync(path: &Path, contents: &[u8]) -> Result<()> {
+    let dir = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => std::path::PathBuf::from("."),
+    };
+
+    let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(AppError::Io)?;
+    tmp.write_all(contents).map_err(AppError::Io)?;
+    tmp.as_file().sync_all().map_err(AppError::Io)?;
+    tmp.persist(path).map_err(|e| AppError::Io(e.error))?;
+    Ok(())
+}
 
 /// Helper function to read a specific zip entry by index and encode it as Base64
 async fn read_zip_entry_as_base64(
