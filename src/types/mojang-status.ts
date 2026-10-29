@@ -17,6 +17,8 @@ export const MONITORED_MOJANG_SERVICES = [
   { id: "microsoft", label: "Microsoft Auth" },
   { id: "api", label: "Mojang API" },
   { id: "session", label: "Session Server" },
+  { id: "skins", label: "Skin Server" },
+  { id: "voxel", label: "Voxel API" },
 ] as const;
 
 export type MonitoredMojangServiceId = (typeof MONITORED_MOJANG_SERVICES)[number]["id"];

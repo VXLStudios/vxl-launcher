@@ -58,6 +58,8 @@ pub struct LauncherConfig {
     pub multiple_log_windows: bool,
     #[serde(default = "default_use_browser_based_login")]
     pub use_browser_based_login: bool,
+    #[serde(default)]
+    pub streamer_mode: bool,
 }
 
 fn default_config_version() -> u32 {
@@ -122,6 +124,7 @@ impl Default for LauncherConfig {
             custom_game_directory: None,
             multiple_log_windows: default_multiple_log_windows(),
             use_browser_based_login: default_use_browser_based_login(),
+            streamer_mode: false,
         }
     }
 }
@@ -351,6 +354,7 @@ impl ConfigManager {
                 && current.custom_game_directory == new_config.custom_game_directory
                 && current.multiple_log_windows == new_config.multiple_log_windows
                 && current.use_browser_based_login == new_config.use_browser_based_login
+                && current.streamer_mode == new_config.streamer_mode
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -451,6 +455,12 @@ impl ConfigManager {
                         current.use_browser_based_login, new_config.use_browser_based_login
                     );
                 }
+                if current.streamer_mode != new_config.streamer_mode {
+                    info!(
+                        "Changing streamer mode: {} -> {}",
+                        current.streamer_mode, new_config.streamer_mode
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -470,6 +480,7 @@ impl ConfigManager {
                     custom_game_directory: new_config.custom_game_directory.clone(),
                     multiple_log_windows: new_config.multiple_log_windows,
                     use_browser_based_login: new_config.use_browser_based_login,
+                    streamer_mode: new_config.streamer_mode,
                 };
 
                 true

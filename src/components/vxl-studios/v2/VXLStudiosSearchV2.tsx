@@ -3,10 +3,17 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { VXLStudiosService } from '../../../services/vxl-studios-service';
+import type { VxlCurseForgeCatalogMod } from '../../../services/vxl-api-client';
+import {
+  isVxlCurseForgeMod,
+  isVxlCurseForgeModpack,
+  isVxlCurseForgeResourcePack,
+  latestVxlCurseForgeGameVersion,
+  vxlCurseForgeProjectType,
+} from '../../../services/vxl-curseforge-catalog';
 import UnifiedService from '../../../services/unified-service';
 import type { ModrinthSearchHit } from '../../../types/modrinth';
 import type { ModrinthProject } from '../../../types/modrinth';
-import type { CurseForgeMod } from '../../../types/curseforge';
 import { ModPlatform, UnifiedSortType, UnifiedProjectType, type UnifiedVersion } from '../../../types/unified';
 import * as ProfileService from '../../../services/profile-service';
 import { toast } from 'react-hot-toast';
@@ -24,7 +31,7 @@ type Profile = any;
 // Global cache for VXL Studios projects (persists for the launcher session)
 const vxlStudiosCache = {
   modrinth: null as ModrinthProject[] | null,
-  curseforge: null as CurseForgeMod[] | null,
+  curseforge: null as VxlCurseForgeCatalogMod[] | null,
 };
 
 export interface VXLStudiosSearchV2Props {
@@ -53,7 +60,7 @@ export function VXLStudiosSearchV2({
   const [activeSource, setActiveSource] = useState<'modrinth' | 'curseforge'>('modrinth');
   const [projectType, setProjectType] = useState<'mod' | 'modpack' | 'resourcepack'>('modpack');
   const [allModrinthProjects, setAllModrinthProjects] = useState<ModrinthProject[]>([]);
-  const [allCurseForgeProjects, setAllCurseForgeProjects] = useState<CurseForgeMod[]>([]);
+  const [allCurseForgeProjects, setAllCurseForgeProjects] = useState<VxlCurseForgeCatalogMod[]>([]);
   
   const [isSidebarVisible, setIsSidebarVisible] = useState(initialSidebarVisible);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -312,19 +319,14 @@ export function VXLStudiosSearchV2({
           setAllCurseForgeProjects(vxlStudiosCache.curseforge);
           console.log("[VXLStudiosSearchV2] Using cached CurseForge projects:", vxlStudiosCache.curseforge.length);
         } else {
-          // Fetch CurseForge project IDs from VXL Studios API
-          const vxlApiResponse = await fetch('https://api.voxelstudios.co.uk/api/v1/curseforge/projects?game=minecraft');
-          const vxlApiData = await vxlApiResponse.json();
-          const curseForgeModIds: number[] = vxlApiData.projects?.map((p: { id: number }) => p.id) || [];
-          
-          if (curseForgeModIds.length > 0) {
-            const curseForgeProjects = await VXLStudiosService.getVXLStudiosCurseForgeProjects(curseForgeModIds);
-            vxlStudiosCache.curseforge = curseForgeProjects;
-            setAllCurseForgeProjects(curseForgeProjects);
-            console.log("[VXLStudiosSearchV2] Fetched fresh CurseForge projects:", curseForgeProjects.length);
-          } else {
-            setAllCurseForgeProjects([]);
-          }
+          const curseForgeProjects =
+            await VXLStudiosService.getVXLStudiosCurseForgeCatalog('minecraft');
+          vxlStudiosCache.curseforge = curseForgeProjects;
+          setAllCurseForgeProjects(curseForgeProjects);
+          console.log(
+            "[VXLStudiosSearchV2] Fetched fresh CurseForge projects:",
+            curseForgeProjects.length,
+          );
         }
       } catch (err) {
         console.error("[VXLStudiosSearchV2] Error fetching CurseForge projects:", err);
@@ -342,14 +344,9 @@ export function VXLStudiosSearchV2({
     }
   }, [activeSource]);
 
-  // Helper function to get latest game version from CurseForge project
-  const getLatestGameVersionCurseForge = (project: CurseForgeMod): string | null => {
-    if (!project.latestFilesIndexes || project.latestFilesIndexes.length === 0) {
-      return null;
-    }
-    // Get the first (latest) file's game version
-    return project.latestFilesIndexes[0]?.gameVersion || null;
-  };
+  // Helper function to get latest game version from catalog CurseForge project
+  const getLatestGameVersionCurseForge = (project: VxlCurseForgeCatalogMod): string | null =>
+    latestVxlCurseForgeGameVersion(project);
 
   // Helper function to get latest game version from Modrinth project
   const getLatestGameVersionModrinth = (project: ModrinthProject): string | null => {
@@ -400,43 +397,30 @@ export function VXLStudiosSearchV2({
           setShowNoResultsMessage(true);
         }
       } else if (activeSource === 'curseforge') {
-        // Helper to map CurseForge classId to project type
-        const mapCurseForgeClassIdToProjectType = (classId: number): 'mod' | 'modpack' | 'resourcepack' => {
-          if (classId === 4471) return 'modpack';
-          if (classId === 6) return 'mod';
-          if (classId === 12) return 'resourcepack';
-          return 'mod'; // default fallback
-        };
-
-        // Filter cached CurseForge projects by project type (client-side only)
         hits = allCurseForgeProjects
-          .filter(proj => {
-            if (projectType === 'modpack') {
-              return proj.classId === 4471;
-            } else if (projectType === 'mod') {
-              return proj.classId === 6;
-            } else if (projectType === 'resourcepack') {
-              return proj.classId === 12;
-            }
+          .filter((proj) => {
+            if (projectType === 'modpack') return isVxlCurseForgeModpack(proj);
+            if (projectType === 'mod') return isVxlCurseForgeMod(proj);
+            if (projectType === 'resourcepack') return isVxlCurseForgeResourcePack(proj);
             return true;
           })
-          .map(proj => ({
+          .map((proj) => ({
             project_id: proj.id.toString(),
-            project_type: mapCurseForgeClassIdToProjectType(proj.classId ?? 6),
-            slug: proj.slug || proj.name.toLowerCase().replace(/\s+/g, '-'),
+            project_type: vxlCurseForgeProjectType(proj),
+            slug: proj.slug,
             title: proj.name,
             description: proj.summary,
-            author: proj.authors?.[0]?.name || null,
-            categories: proj.categories?.map(c => c.name) || [],
-            display_categories: proj.categories?.map(c => c.name) || [],
+            author: null,
+            categories: [],
+            display_categories: [],
             client_side: 'required' as const,
             server_side: 'required' as const,
             downloads: proj.downloadCount,
-            follows: proj.thumbsUpCount,
-            icon_url: proj.logo?.thumbnailUrl || null,
+            follows: 0,
+            icon_url: proj.iconUrl ?? null,
             latest_version: null,
-            date_created: proj.dateCreated,
-            date_modified: proj.dateModified,
+            date_created: '',
+            date_modified: '',
             license: 'Unknown',
             gallery: [],
             versions: [],
@@ -478,10 +462,9 @@ export function VXLStudiosSearchV2({
       // Modrinth has all types
       types.push('modpack', 'mod', 'resourcepack');
     } else if (activeSource === 'curseforge') {
-      // CurseForge: check which types have projects
-      const hasModpacks = allCurseForgeProjects.some(p => p.classId === 4471);
-      const hasMods = allCurseForgeProjects.some(p => p.classId === 6);
-      const hasResourcepacks = allCurseForgeProjects.some(p => p.classId === 12);
+      const hasModpacks = allCurseForgeProjects.some(isVxlCurseForgeModpack);
+      const hasMods = allCurseForgeProjects.some(isVxlCurseForgeMod);
+      const hasResourcepacks = allCurseForgeProjects.some(isVxlCurseForgeResourcePack);
       
       if (hasModpacks) types.push('modpack');
       if (hasMods) types.push('mod');

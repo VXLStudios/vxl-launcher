@@ -8,6 +8,7 @@ import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Card, IconButton, LoadingState } from "../ui-v2";
 import { listItemAccentHover } from "../ui-v2/tokens";
+import { useStreamerModeStore } from "../../store/streamer-mode-store";
 
 interface ServerInfo {
   name?: string;
@@ -106,13 +107,21 @@ function ServerListItem({
   isConnecting: boolean;
   onConnect: (server: ServerInfo) => void;
 }) {
+  const streamerMode = useStreamerModeStore((state) => state.enabled);
   const faviconSrc = details?.favicon_base64
     ? `data:image/png;base64,${details.favicon_base64}`
     : server.icon_base64
       ? `data:image/png;base64,${server.icon_base64}`
       : null;
 
-  const subtitle = details?.motd_plain || server.address || null;
+  const subtitle = streamerMode
+    ? details?.motd_plain || null
+    : details?.motd_plain || server.address || null;
+
+  const displayName =
+    server.name ||
+    (streamerMode ? "Server" : server.address) ||
+    "Unnamed Server";
 
   return (
     <Card
@@ -136,7 +145,7 @@ function ServerListItem({
 
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-sm font-semibold text-white">
-          {server.name || server.address || "Unnamed Server"}
+          {displayName}
         </h3>
 
         <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-secondary)]">

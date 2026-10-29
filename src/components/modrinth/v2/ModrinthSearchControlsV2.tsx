@@ -148,7 +148,7 @@ export const ModrinthSearchControlsV2: React.FC<
               className={cn(
                 "flex h-full items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-all duration-200",
                 modSource === ModPlatform.Modrinth
-                  ? "bg-[rgba(var(--accent-rgb),0.15)] text-white border border-[var(--accent)]/30"
+                  ? "bg-[#1bd96a]/20 text-white border border-[#1bd96a]/40"
                   : "text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-base)] border border-transparent",
               )}
               title="Search Modrinth"

@@ -7,6 +7,8 @@ import type { MinecraftAccount } from "../../types/minecraft";
 import { useCrafatarAvatar } from "../../hooks/useCrafatarAvatar";
 import { getAvatarUrl } from "../../lib/avatar-utils";
 import { IconButton } from "../ui-v2";
+import { StreamerSensitiveText } from "../ui/StreamerSensitiveText";
+import { useStreamerModeStore } from "../../store/streamer-mode-store";
 
 interface AccountSwitcherPanelProps {
   open: boolean;
@@ -27,6 +29,7 @@ function AccountAvatar({
   account: MinecraftAccount | null;
   size?: number;
 }) {
+  const streamerMode = useStreamerModeStore((state) => state.enabled);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const avatarUrl = useCrafatarAvatar({
     uuid: account?.id,
@@ -51,13 +54,21 @@ function AccountAvatar({
       {displayUrl ? (
         <img
           src={displayUrl}
-          alt={`${username}'s avatar`}
+          alt={streamerMode ? "Account avatar" : `${username}'s avatar`}
           className="h-full w-full object-cover pixelated"
           style={{ imageRendering: "pixelated" }}
           onError={() => setFailedSrc(displayUrl)}
         />
       ) : (
-        <span className="text-xs text-white">{username.charAt(0).toUpperCase()}</span>
+        <span
+          className={cn(
+            "text-xs text-white",
+            streamerMode &&
+              "blur-[5px] transition-[filter] duration-200 group-hover:blur-none",
+          )}
+        >
+          {username.charAt(0).toUpperCase()}
+        </span>
       )}
     </div>
   );
@@ -118,15 +129,13 @@ function AccountSwitcherRow({
         )}
       >
         <AccountAvatar account={account} size={28} />
-        <span
+        <StreamerSensitiveText
+          text={username}
           className={cn(
             "min-w-0 flex-1 truncate text-sm",
             account.active ? "text-[var(--accent)]" : "text-white",
           )}
-          title={username}
-        >
-          {username}
-        </span>
+        />
         {isActivating && (
           <Icon
             icon="solar:refresh-bold"
@@ -211,7 +220,7 @@ function AccountTrigger({
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-overlay)] p-2.5 text-left transition-colors hover:border-[var(--surface-border-strong)] hover:bg-[var(--surface-base)]"
+      className="group flex w-full items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-overlay)] p-2.5 text-left transition-colors hover:border-[var(--surface-border-strong)] hover:bg-[var(--surface-base)]"
     >
       {activeAccount ? (
         <AccountAvatar account={activeAccount} size={32} />
@@ -222,12 +231,10 @@ function AccountTrigger({
       )}
 
       <div className="min-w-0 flex-1">
-        <span
+        <StreamerSensitiveText
+          text={username}
           className="block truncate text-sm font-medium text-white"
-          title={username}
-        >
-          {username}
-        </span>
+        />
         <span className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--accent)]">
           {activeAccount ? (
             <>

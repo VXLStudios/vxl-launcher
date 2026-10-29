@@ -17,6 +17,7 @@ import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVanillaCapeStore } from "../../store/useVanillaCapeStore";
+import { useStreamerModeStore } from "../../store/streamer-mode-store";
 
 const NO_ACCOUNT_SKIN_URL = "/skins/steve.png";
 const RIG_SHADOW = "drop-shadow(5px 10px 5px rgba(0,0,0,0.75))";
@@ -68,6 +69,7 @@ export function PlayerRig({ playerName, outline, className }: PlayerRigProps) {
   const idleEmote = useIdleEmote();
   const skinRenderer3d = useQualitySettingsStore((s) => s.skinRenderer3d);
   const isWindowFocused = useWindowFocus();
+  const streamerMode = useStreamerModeStore((state) => state.enabled);
   const hasAccount = !!activeAccount;
   const loading = useMinLoading(hasAccount && skinLoading, 450);
 
@@ -112,12 +114,13 @@ export function PlayerRig({ playerName, outline, className }: PlayerRigProps) {
     `${attachablesSyncKey}`,
   );
   const rigNametag = useMemo(() => {
+    if (streamerMode) return null;
     // Avoid flashing "No account" while auth is still loading — concurrent
     // async nametag rebuilds can leave duplicate labels on screen.
     if (isLoadingAccounts) return null;
     if (!hasAccount) return { text: "No account", iconUrl: null, iconPlus: false };
     return ownNametag;
-  }, [hasAccount, isLoadingAccounts, ownNametag]);
+  }, [streamerMode, hasAccount, isLoadingAccounts, ownNametag]);
 
   const skinViewKey = activeAccount?.id ?? "no-account";
 

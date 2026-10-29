@@ -27,7 +27,7 @@ pub fn is_flatpak() -> bool {
 
 /// Builds the dynamic updater endpoint URL for the configured release channel.
 fn build_update_endpoint(is_beta_channel: bool) -> AppResult<String> {
-    let base_repo_url = "https://api.voxelstudios.co.uk/api/v1/launcher/releases";
+    let base_repo_url = "https://api.voxelstudios.co.uk/v1/launcher/releases";
     let channel_query = if is_beta_channel {
         "?channel=beta"
     } else {

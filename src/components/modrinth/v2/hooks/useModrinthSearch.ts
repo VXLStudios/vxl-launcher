@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import UnifiedService from '../../../../services/unified-service';
 import { ModrinthService } from '../../../../services/modrinth-service';
 import { VXLStudiosService } from '../../../../services/vxl-studios-service';
+import { vxlCurseForgeProjectType } from '../../../../services/vxl-curseforge-catalog';
 import type {
   UnifiedModSearchResult,
   UnifiedModSearchResponse,
@@ -237,58 +238,33 @@ export function useModrinthSearch({
           } else {
             // Fetch CurseForge mod IDs from VXL Studios API
             try {
-              const response = await fetch('https://api.voxelstudios.co.uk/api/v1/curseforge/projects?game=minecraft');
-              if (!response.ok) {
-                throw new Error(`Failed to fetch CurseForge project IDs: ${response.statusText}`);
-              }
-              const data = await response.json();
-              debugLog('[ModrinthSearchV2] VXL Studios API response:', data);
-              
-              // Handle both array and object responses
-              let modIds: number[] = [];
-              if (Array.isArray(data)) {
-                modIds = data.map((project: any) => project.id);
-              } else if (data && typeof data === 'object') {
-                // If it's an object, try to extract the projects array
-                const projectsArray = data.projects || data.data || data.mods || [];
-                modIds = projectsArray.map((project: any) => project.id);
-              }
-              
-              debugLog('[ModrinthSearchV2] Fetching CurseForge projects with IDs:', modIds);
-              const curseForgeProjects = await VXLStudiosService.getVXLStudiosCurseForgeProjects(modIds);
-              
-              // Convert CurseForgeMod objects to UnifiedModSearchResult format
-              convertedProjects = curseForgeProjects.map(proj => {
-                // Determine project type
-                const projectType = proj.classId === 4471 ? 'modpack' : proj.classId === 6 ? 'mod' : proj.classId === 12 ? 'resourcepack' : 'mod';
-                
-                // Extract version IDs from latestFiles
-                const versionIds = proj.latestFiles?.map(file => file.id.toString()) || [];
-                
+              const catalog = await VXLStudiosService.getVXLStudiosCurseForgeCatalog('minecraft');
+              debugLog('[ModrinthSearchV2] CurseForge catalog from Studios API:', catalog.length);
+
+              convertedProjects = catalog.map((proj) => {
+                const mappedType = vxlCurseForgeProjectType(proj);
                 return {
                   project_id: proj.id.toString(),
-                  project_type: projectType,
-                  slug: proj.slug || proj.name.toLowerCase().replace(/\s+/g, '-'),
+                  project_type: mappedType,
+                  slug: proj.slug,
                   title: proj.name,
                   description: proj.summary,
-                  author: proj.authors?.[0]?.name || null,
-                  categories: proj.categories?.map(c => c.name) || [],
-                  display_categories: proj.categories?.map(c => c.name) || [],
+                  author: null,
+                  categories: [],
+                  display_categories: [],
                   client_side: 'required' as const,
                   server_side: 'required' as const,
                   downloads: proj.downloadCount,
-                  follows: proj.thumbsUpCount,
-                  icon_url: proj.logo?.thumbnailUrl || null,
+                  follows: 0,
+                  icon_url: proj.iconUrl ?? null,
                   latest_version: null,
-                  date_created: proj.dateCreated,
-                  date_modified: proj.dateModified,
+                  date_created: '',
+                  date_modified: '',
                   license: 'Unknown',
                   gallery: [],
-                  versions: versionIds,
+                  versions: [],
                   source: ModPlatform.CurseForge,
-                  project_url: projectType === 'modpack' 
-                    ? `https://www.curseforge.com/minecraft/modpacks/${proj.slug || proj.id}`
-                    : `https://www.curseforge.com/minecraft/mods/${proj.slug || proj.id}`,
+                  project_url: proj.websiteUrl,
                 };
               });
               

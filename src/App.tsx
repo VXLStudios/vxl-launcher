@@ -33,6 +33,7 @@ import { loadIcons } from '@iconify/react';
 import { invoke } from '@tauri-apps/api/core';
 import { useProfileStore } from "./store/profile-store";
 import { useMinecraftAuthStore } from "./store/minecraft-auth-store";
+import { useStreamerModeStore } from "./store/streamer-mode-store";
 import { useSettingsModalStore } from "./store/settings-modal-store";
 
 export type ProfilesTabContext = {
@@ -212,6 +213,7 @@ export function App() {
         } else {
           setCurrentGroupingCriterion("none");
         }
+        useStreamerModeStore.getState().setEnabled(!!config?.streamer_mode);
       })
       .catch((err) => {
         console.error(

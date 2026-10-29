@@ -20,3 +20,4 @@ pub mod profile_command;
 pub mod skin_preview_command;
 pub mod skin_render_command;
 pub mod vanilla_cape_command;
+pub mod vxl_api_command;

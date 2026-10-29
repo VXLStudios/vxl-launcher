@@ -28,4 +28,5 @@ export interface LauncherConfig {
   custom_game_directory: string | null; // Option<PathBuf>
   multiple_log_windows: boolean;
   use_browser_based_login: boolean;
+  streamer_mode: boolean;
 }

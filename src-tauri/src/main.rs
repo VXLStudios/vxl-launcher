@@ -587,6 +587,7 @@ async fn main() {
             get_shared_files,
             commands::changelog_command::fetch_changelog_command,
             commands::changelog_command::fetch_version_changelog_command,
+            commands::vxl_api_command::fetch_vxl_api_json,
             commands::mojang_status_command::fetch_mojang_service_status_command
         ])
         .build(tauri::generate_context!())

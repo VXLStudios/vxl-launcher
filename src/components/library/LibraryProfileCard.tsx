@@ -7,6 +7,7 @@ import type { Profile } from "../../types/profile";
 import { ProfileIconV2 } from "../profiles/ProfileIconV2";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
 import { Card } from "../ui-v2";
+import { TagBadge } from "../ui/TagBadge";
 import { cn } from "../../lib/utils";
 import { useProfileLaunch } from "../../hooks/useProfileLaunch";
 import { SettingsContextMenu, type ContextMenuItem } from "../ui/SettingsContextMenu";
@@ -80,9 +81,11 @@ function formatLastPlayed(lastPlayed: string | null | undefined) {
 
 function ProfileMeta({
   profile,
+  groupLabel,
   showLastPlayed = false,
 }: {
   profile: Profile;
+  groupLabel?: string | null;
   showLastPlayed?: boolean;
 }) {
   const lastPlayed = showLastPlayed ? formatLastPlayed(profile.last_played) : null;
@@ -108,6 +111,15 @@ function ProfileMeta({
         />
         <span>{formatLoader(profile.loader)}</span>
       </span>
+
+      {groupLabel && (
+        <>
+          <span className="hidden h-3 w-px bg-[var(--surface-border-strong)] sm:block" aria-hidden />
+          <TagBadge size="sm" variant="flat" className="max-w-[140px] truncate">
+            {groupLabel}
+          </TagBadge>
+        </>
+      )}
 
       {lastPlayed && (
         <>
@@ -382,12 +394,12 @@ export function LibraryProfileCard({
           {profile.name}
         </h3>
 
-        {groupLabel && (
-          <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{groupLabel}</p>
-        )}
-
-        <div className={cn(groupLabel ? "mt-1.5" : "mt-1")}>
-          <ProfileMeta profile={profile} showLastPlayed={layout === "list"} />
+        <div className="mt-1">
+          <ProfileMeta
+            profile={profile}
+            groupLabel={groupLabel}
+            showLastPlayed={layout === "list"}
+          />
         </div>
       </div>
 

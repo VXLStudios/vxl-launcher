@@ -11,6 +11,7 @@ import { SettingRow } from "../../ui/settings/SettingRow";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { useGlobalModal } from "../../../hooks/useGlobalModal";
 import { useSettingsConfig, useSettingsKeywords } from "./settings-context";
+import { useStreamerModeStore } from "../../../store/streamer-mode-store";
 
 const COLOR_PICKER_MODAL_ID = "color-picker-modal";
 const NESTED_MODAL_Z_INDEX = 1100;
@@ -20,6 +21,7 @@ export function GeneralTab() {
   const { tempConfig, setTempConfig, saving } = useSettingsConfig();
   const { accentColor, setBorderRadius, borderRadius } = useThemeStore();
   const { showModal, hideModal } = useGlobalModal();
+  const setStreamerMode = useStreamerModeStore((state) => state.setEnabled);
 
   const canShowExperimental = false;
 
@@ -149,6 +151,23 @@ export function GeneralTab() {
             />
           </SettingRow>
         )}
+        <SettingRow
+          label="Streamer Mode"
+          description="Hide Minecraft usernames and server addresses. Account names stay blurred until you hover them; the play screen never shows a nametag."
+          searchKeywords={kw("streamer", "stream", "privacy", "hide username", "ip")}
+          disabled={saving}
+        >
+          <ToggleSwitch
+            checked={tempConfig?.streamer_mode || false}
+            onChange={(checked) => {
+              if (!tempConfig) return;
+              setStreamerMode(checked);
+              setTempConfig({ ...tempConfig, streamer_mode: checked });
+            }}
+            disabled={saving}
+            size="md"
+          />
+        </SettingRow>
         <SettingRow
           label="Open Logs After Starting"
           description="Automatically open the game logs window when launching Minecraft."

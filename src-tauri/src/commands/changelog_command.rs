@@ -23,7 +23,7 @@ pub struct ChangelogResponse {
 pub async fn fetch_changelog_command() -> Result<ChangelogResponse, CommandError> {
     // Fetch changelog from the API
     let launcher_version = concat!("v", env!("CARGO_PKG_VERSION"));
-    let api_url = format!("https://api.voxelstudios.co.uk/api/v1/launcher/changelog?launcher_version={}", launcher_version);
+    let api_url = format!("https://api.voxelstudios.co.uk/v1/launcher/changelog?launcher_version={}", launcher_version);
     
     let response = reqwest::get(&api_url).await.map_err(|e| {
         AppError::MinecraftApi(e)

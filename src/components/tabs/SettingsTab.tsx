@@ -16,6 +16,7 @@ import { GeneralTab } from "./settings/GeneralTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { AdvancedTab } from "./settings/AdvancedTab";
 import { SettingsConfigProvider } from "./settings/settings-context";
+import { useStreamerModeStore } from "../../store/streamer-mode-store";
 import { Button, LoadingState, Alert, EmptyState } from "../ui-v2";
 
 type SettingsTabId = "general" | "appearance" | "advanced";
@@ -172,6 +173,7 @@ export function SettingsTab({ onClose }: SettingsTabProps) {
       };
       setConfig(configWithHooks);
       setTempConfig({ ...configWithHooks });
+      useStreamerModeStore.getState().setEnabled(!!configWithHooks.streamer_mode);
     } catch (err) {
       console.error("Failed to load launcher config:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -194,6 +196,7 @@ export function SettingsTab({ onClose }: SettingsTabProps) {
       try {
         const updatedConfig = await ConfigService.setLauncherConfig(configToSave);
         setConfig(updatedConfig);
+        useStreamerModeStore.getState().setEnabled(!!updatedConfig.streamer_mode);
         toast.success("Settings auto-saved!", {
           duration: 2000,
           position: "bottom-right",
