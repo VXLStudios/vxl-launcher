@@ -6,7 +6,7 @@ pub struct FabricVersion {
     pub stable: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricLoaderVersion {
     pub separator: String,
     pub build: i32,
@@ -29,7 +29,7 @@ pub struct FabricVersionManifest {
     pub installer: FabricInstallerVersion,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricIntermediary {
     pub maven: String,
     pub version: String,
@@ -53,7 +53,7 @@ pub struct FabricLibrary {
     pub size: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricLibraries {
     pub client: Vec<FabricLibrary>,
     pub common: Vec<FabricLibrary>,
@@ -62,7 +62,7 @@ pub struct FabricLibraries {
     pub development: Option<Vec<FabricLibrary>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricMainClassObject {
     #[serde(rename = "client")]
     pub client: String,
@@ -70,7 +70,7 @@ pub struct FabricMainClassObject {
     pub server: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FabricMainClass {
     String(String),
@@ -93,7 +93,7 @@ impl FabricMainClass {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricLauncherMeta {
     pub version: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,7 +103,7 @@ pub struct FabricLauncherMeta {
     pub main_class: FabricMainClass,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FabricVersionInfo {
     pub loader: FabricLoaderVersion,
     pub intermediary: FabricIntermediary,

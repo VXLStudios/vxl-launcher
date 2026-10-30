@@ -63,39 +63,28 @@ impl NeoForgeMavenMetadata {
     }
 
     pub fn parse_neoforge_version_to_minecraft(neoforge_version: &str) -> Option<String> {
-        let parts: Vec<&str> = neoforge_version.split('.').collect();
+        let version_core = neoforge_version.split('-').next().unwrap_or(neoforge_version);
+        let parts: Vec<&str> = version_core.split('.').collect();
 
-        if parts.is_empty() {
+        if parts.len() < 2 {
             return None;
         }
 
-        match parts[0].parse::<u32>() {
-            Ok(p1) => {
-                if p1 > 0 {
-                    // Release/Beta logic
-                    if parts.len() < 2 {
-                        return None; // Need at least p1 and p2
-                    }
-                    match parts[1].parse::<u32>() {
-                        Ok(p2) => {
-                            if p2 > 0 {
-                                Some(format!("1.{}.{}", p1, p2))
-                            } else {
-                                Some(format!("1.{}", p1))
-                            }
-                        }
-                        Err(_) => None, // p2 is not a number
-                    }
-                } else {
-                    // p1 == 0, Snapshot/Custom logic
-                    if parts.len() > 1 {
-                        Some(parts[1].to_string())
-                    } else {
-                        None // Need at least two parts for snapshot logic
-                    }
-                }
-            }
-            Err(_) => None, // p1 is not a number
+        let p1: u32 = parts[0].parse().ok()?;
+
+        if p1 == 0 {
+            return Some(parts[1].to_string());
+        }
+
+        let p2: u32 = parts[1].parse().ok()?;
+
+        // Minecraft 26.x snapshots use unprefixed game versions (26.3); NeoForge uses 26.3.0.x builds.
+        if p1 >= 26 {
+            Some(format!("{}.{}", p1, p2))
+        } else if p2 > 0 {
+            Some(format!("1.{}.{}", p1, p2))
+        } else {
+            Some(format!("1.{}", p1))
         }
     }
 
@@ -109,5 +98,52 @@ impl NeoForgeMavenMetadata {
                 parsed_mc_version.as_deref().unwrap_or("Parse Failed")
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NeoForgeMavenMetadata;
+
+    #[test]
+    fn maps_legacy_neoforge_versions_to_1_x_y() {
+        assert_eq!(
+            NeoForgeMavenMetadata::parse_neoforge_version_to_minecraft("21.11.38-beta"),
+            Some("1.21.11".to_string())
+        );
+    }
+
+    #[test]
+    fn maps_snapshot_neoforge_versions_to_unprefixed_mc() {
+        assert_eq!(
+            NeoForgeMavenMetadata::parse_neoforge_version_to_minecraft("26.3.0.99"),
+            Some("26.3".to_string())
+        );
+        assert_eq!(
+            NeoForgeMavenMetadata::parse_neoforge_version_to_minecraft("26.3.0.14-beta"),
+            Some("26.3".to_string())
+        );
+    }
+
+    #[test]
+    fn filters_maven_versions_for_minecraft_26_3() {
+        let metadata: NeoForgeMavenMetadata = quick_xml::de::from_str(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+                <metadata>
+                  <versioning>
+                    <latest>26.3.0.99</latest>
+                    <release>26.3.0.99</release>
+                    <versions>
+                      <version>21.11.0-beta</version>
+                      <version>26.3.0.14-beta</version>
+                      <version>26.3.0.99</version>
+                    </versions>
+                  </versioning>
+                </metadata>"#,
+        )
+        .expect("parse metadata");
+
+        let for_26_3 = metadata.get_versions_for_minecraft("26.3");
+        assert_eq!(for_26_3, vec!["26.3.0.99", "26.3.0.14-beta"]);
     }
 }

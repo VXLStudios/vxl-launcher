@@ -1,6 +1,7 @@
 pub mod fabric_libraries_download;
 pub mod forge_installer_download;
 pub mod forge_libraries_download;
+pub mod loader_library_legacy;
 pub mod java_download;
 pub mod logging_config_download;
 pub mod mc_assets_download;

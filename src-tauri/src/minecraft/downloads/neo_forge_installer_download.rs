@@ -1,4 +1,5 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::minecraft::api::neo_forge_maven::neoforge_maven_download_url;
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::neo_forge_install_profile::NeoForgeInstallProfile;
 use crate::minecraft::dto::neo_forge_meta::NeoForgeVersion;
@@ -34,7 +35,7 @@ impl NeoForgeInstallerDownloadService {
         let jar_path = self.base_path.join(&maven_path);
 
         // Konstruiere die Download-URL
-        let url = format!("https://maven.neoforged.net/{}", maven_path);
+        let url = neoforge_maven_download_url(&maven_path);
 
         info!("Downloading from: {}", url);
 

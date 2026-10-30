@@ -227,10 +227,45 @@ pub fn join_content_file_path(target_dir: impl AsRef<Path>, file_name: &str) -> 
 }
 
 /// Joins a zip/tar entry onto `base` after zip-slip validation.
+/// Does not require intermediate directories to exist yet (used before `create_dir_all`).
 pub fn join_archive_entry(base: impl AsRef<Path>, entry_name: &str) -> Result<PathBuf> {
     validate_zip_entry_path(entry_name)?;
-    let joined = base.as_ref().join(entry_name);
-    validate_path_under_base(&joined, base)
+    let base = base.as_ref();
+    if !base.exists() {
+        return Err(AppError::Other(format!(
+            "Base path does not exist: {}",
+            base.display()
+        )));
+    }
+
+    let canonical_base = std::fs::canonicalize(base).map_err(AppError::Io)?;
+    let joined = push_zip_entry_components(&canonical_base, entry_name)?;
+
+    if !joined.starts_with(&canonical_base) {
+        return Err(AppError::Other(format!(
+            "Zip entry escapes base directory: {}",
+            entry_name
+        )));
+    }
+
+    Ok(joined)
+}
+
+fn push_zip_entry_components(base: &Path, entry_name: &str) -> Result<PathBuf> {
+    let mut result = base.to_path_buf();
+    for component in Path::new(entry_name).components() {
+        match component {
+            Component::Normal(part) => result.push(part),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(AppError::Other(format!(
+                    "Unsafe zip entry path: {}",
+                    entry_name
+                )));
+            }
+        }
+    }
+    Ok(result)
 }
 
 /// Validates zip archive entry paths to prevent zip-slip attacks.

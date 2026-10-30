@@ -1324,80 +1324,148 @@ impl ProfileManager {
         _parent_mod_name: &str,
     ) -> Result<()> {
         use crate::integrations::curseforge::CurseForgeFileRelationType;
+        use crate::integrations::mod_lookup::{chunk_unique, CURSEFORGE_FILE_BATCH};
+        use futures::future::join_all;
+        use std::collections::HashMap;
 
         let profile = self.get_profile(profile_id).await?;
         let profile_loader_str = profile.loader.as_str().to_string();
         let profile_game_version = profile.game_version.clone();
 
-        for dependency in &file.dependencies {
-            // Only install required dependencies
-            if let Some(relation_type) = CurseForgeFileRelationType::from_u32(dependency.relationType) {
-                if relation_type.should_install() {
-                    info!("Processing CurseForge dependency: ModId={}, RelationType={}", dependency.modId, relation_type.as_str());
+        let dependency_mod_ids: Vec<u32> = file
+            .dependencies
+            .iter()
+            .filter_map(|dependency| {
+                CurseForgeFileRelationType::from_u32(dependency.relationType).and_then(|relation| {
+                    if relation.should_install() {
+                        Some(dependency.modId)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
 
-                    // Get dependency mod information
-                    match crate::integrations::curseforge::get_mod_info(dependency.modId).await {
-                        Ok(dep_mod_info) => {
-                            // Get compatible files for this dependency
-                            match crate::integrations::curseforge::get_mod_files(
-                                dependency.modId,
-                                Some(profile_game_version.clone()),
-                                None, // We'll filter loaders in the unified conversion
-                                None,
-                                None,
-                                Some(50), // Get first 50 files
-                            ).await {
-                                Ok(dep_files_response) => {
-                                    if let Some(best_file) = dep_files_response.data.into_iter().max_by_key(|f| f.fileDate.clone()) {
-                                        // Check if this file supports the required loader
-                                        let file_loaders = crate::integrations::unified_mod::extract_loaders_from_game_versions(&best_file.gameVersions);
+        if dependency_mod_ids.is_empty() {
+            return Ok(());
+        }
 
-                                        // Check if the file is compatible with the profile's loader
-                                        let is_compatible = if profile_loader_str == "vanilla" {
-                                            // Vanilla is compatible with everything
-                                            true
-                                        } else {
-                                            file_loaders.contains(&profile_loader_str)
-                                        };
-
-                                        if is_compatible {
-                                            // Create dependency payload
-                                            let dep_payload = crate::commands::content_command::InstallContentPayload {
-                                                profile_id,
-                                                project_id: dependency.modId.to_string(),
-                                                version_id: best_file.id.to_string(),
-                                                file_name: best_file.fileName.clone(),
-                                                download_url: best_file.downloadUrl.clone(),
-                                                file_hash_sha1: best_file.hashes.iter()
-                                                    .find(|h| h.algo == 1) // SHA1 = 1
-                                                    .map(|h| h.value.clone()),
-                                                file_fingerprint: Some(best_file.fileFingerprint),
-                                                content_name: Some(best_file.displayName.clone()),
-                                                version_number: Some(best_file.fileName.clone()),
-                                                content_type: crate::utils::profile_utils::ContentType::Mod,
-                                                loaders: Some(file_loaders),
-                                                game_versions: Some(best_file.gameVersions.clone()),
-                                                source: crate::integrations::unified_mod::ModPlatform::CurseForge,
-                                            };
-
-                                            // Recursively install dependency (without further dependencies to avoid loops)
-                                            match Box::pin(self.add_mod_from_payload(&dep_payload, false)).await {
-                                                Ok(_) => info!("Successfully installed CurseForge dependency '{}'", dep_mod_info.name),
-                                                Err(e) => error!("Failed to install CurseForge dependency '{}': {}", dep_mod_info.name, e),
-                                            }
-                                        } else {
-                                            warn!("CurseForge dependency '{}' (ID: {}) is not compatible with profile loader '{}'", dep_mod_info.name, dependency.modId, profile_loader_str);
-                                        }
-                                    } else {
-                                        warn!("No compatible files found for CurseForge dependency mod ID {}", dependency.modId);
-                                    }
-                                }
-                                Err(e) => error!("Failed to get files for CurseForge dependency '{}': {}", dependency.modId, e),
-                            }
-                        }
-                        Err(e) => error!("Failed to get mod info for CurseForge dependency '{}': {}", dependency.modId, e),
+        let mut mod_info_by_id: HashMap<u32, crate::integrations::curseforge::CurseForgeMod> =
+            HashMap::new();
+        for chunk in chunk_unique(dependency_mod_ids.clone(), CURSEFORGE_FILE_BATCH) {
+            match crate::integrations::curseforge::get_mods_by_ids(chunk, Some(true)).await {
+                Ok(response) => {
+                    for entry in response.data {
+                        mod_info_by_id.insert(entry.id, entry);
                     }
                 }
+                Err(e) => error!("Failed to batch-fetch CurseForge dependency mods: {}", e),
+            }
+        }
+
+        let file_list_futures = dependency_mod_ids.iter().map(|mod_id| {
+            let mod_id = *mod_id;
+            let game_version = profile_game_version.clone();
+            async move {
+                (
+                    mod_id,
+                    crate::integrations::curseforge::get_mod_files(
+                        mod_id,
+                        Some(game_version),
+                        None,
+                        None,
+                        None,
+                        Some(50),
+                    )
+                    .await,
+                )
+            }
+        });
+
+        for (mod_id, files_result) in join_all(file_list_futures).await {
+            let dep_mod_info = match mod_info_by_id.get(&mod_id) {
+                Some(info) => info,
+                None => {
+                    warn!(
+                        "No mod metadata returned for CurseForge dependency mod ID {}",
+                        mod_id
+                    );
+                    continue;
+                }
+            };
+
+            info!(
+                "Processing CurseForge dependency: ModId={}, name={}",
+                mod_id, dep_mod_info.name
+            );
+
+            match files_result {
+                Ok(dep_files_response) => {
+                    if let Some(best_file) = dep_files_response
+                        .data
+                        .into_iter()
+                        .max_by_key(|f| f.fileDate.clone())
+                    {
+                        let file_loaders =
+                            crate::integrations::unified_mod::extract_loaders_from_game_versions(
+                                &best_file.gameVersions,
+                            );
+
+                        let is_compatible = if profile_loader_str == "vanilla" {
+                            true
+                        } else {
+                            file_loaders.contains(&profile_loader_str)
+                        };
+
+                        if is_compatible {
+                            let dep_payload =
+                                crate::commands::content_command::InstallContentPayload {
+                                    profile_id,
+                                    project_id: mod_id.to_string(),
+                                    version_id: best_file.id.to_string(),
+                                    file_name: best_file.fileName.clone(),
+                                    download_url: best_file.downloadUrl.clone(),
+                                    file_hash_sha1: best_file
+                                        .hashes
+                                        .iter()
+                                        .find(|h| h.algo == 1)
+                                        .map(|h| h.value.clone()),
+                                    file_fingerprint: Some(best_file.fileFingerprint),
+                                    content_name: Some(best_file.displayName.clone()),
+                                    version_number: Some(best_file.fileName.clone()),
+                                    content_type: crate::utils::profile_utils::ContentType::Mod,
+                                    loaders: Some(file_loaders),
+                                    game_versions: Some(best_file.gameVersions.clone()),
+                                    source: crate::integrations::unified_mod::ModPlatform::CurseForge,
+                                };
+
+                            match Box::pin(self.add_mod_from_payload(&dep_payload, false)).await {
+                                Ok(_) => info!(
+                                    "Successfully installed CurseForge dependency '{}'",
+                                    dep_mod_info.name
+                                ),
+                                Err(e) => error!(
+                                    "Failed to install CurseForge dependency '{}': {}",
+                                    dep_mod_info.name, e
+                                ),
+                            }
+                        } else {
+                            warn!(
+                                "CurseForge dependency '{}' (ID: {}) is not compatible with profile loader '{}'",
+                                dep_mod_info.name, mod_id, profile_loader_str
+                            );
+                        }
+                    } else {
+                        warn!(
+                            "No compatible files found for CurseForge dependency mod ID {}",
+                            mod_id
+                        );
+                    }
+                }
+                Err(e) => error!(
+                    "Failed to get files for CurseForge dependency '{}': {}",
+                    mod_id, e
+                ),
             }
         }
 

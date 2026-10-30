@@ -1,5 +1,7 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
+use crate::minecraft::api::fabric_api::FabricApi;
+use crate::minecraft::dto::fabric_meta::FabricLibrary;
 use crate::minecraft::dto::quilt_meta::{QuiltLibrary, QuiltVersionInfo};
 use crate::utils::download_utils::{DownloadUtils, DownloadConfig};
 use futures::stream::StreamExt;
@@ -143,11 +145,49 @@ impl QuiltLibrariesDownloadService {
         }
     }
 
-    pub async fn download_quilt_libraries(&self, version: &QuiltVersionInfo) -> Result<()> {
-        info!("\nDownloading Quilt components...");
+    fn quilt_library_from_fabric(fabric: &FabricLibrary) -> QuiltLibrary {
+        QuiltLibrary {
+            name: fabric.name.clone(),
+            url: fabric.url.clone(),
+            md5: fabric.md5.clone(),
+            sha1: fabric.sha1.clone(),
+            sha256: fabric.sha256.clone(),
+            sha512: fabric.sha512.clone(),
+            size: fabric.size,
+        }
+    }
 
+    fn is_ow2_asm_library(name: &str) -> bool {
+        name.starts_with("org.ow2.asm:")
+    }
+
+    async fn fabric_peer_for_quilt_loader(
+        minecraft_version: &str,
+        quilt: &QuiltVersionInfo,
+    ) -> Result<Option<crate::minecraft::dto::fabric_meta::FabricVersionInfo>> {
+        let fabric_api = FabricApi::new();
+        let fabric_versions = fabric_api.get_loader_versions(minecraft_version).await?;
+        Ok(fabric_versions
+            .iter()
+            .find(|v| v.loader.version == quilt.loader.version)
+            .cloned()
+            .or_else(|| fabric_versions.iter().find(|v| v.loader.stable).cloned())
+            .or_else(|| fabric_versions.first().cloned()))
+    }
+
+    async fn collect_libraries_for_version(
+        &self,
+        minecraft_version: &str,
+        version: &QuiltVersionInfo,
+    ) -> Result<Vec<QuiltLibrary>> {
         let mut all_libraries = Vec::new();
         all_libraries.push(self.create_library_from_maven(&version.loader.maven));
+
+        let fabric_peer = if version.mappings_artifact().is_none() {
+            Self::fabric_peer_for_quilt_loader(minecraft_version, version).await?
+        } else {
+            None
+        };
 
         if let Some(mappings) = version.mappings_artifact() {
             if mappings.maven.starts_with("net.fabricmc:") {
@@ -155,13 +195,59 @@ impl QuiltLibrariesDownloadService {
             } else {
                 all_libraries.push(self.create_library_from_maven(&mappings.maven));
             }
+        } else if let Some(ref fabric) = fabric_peer {
+            info!(
+                "Quilt meta has no mappings for MC {}; using Fabric intermediary {}",
+                minecraft_version, fabric.intermediary.maven
+            );
+            all_libraries.push(self.create_library_from_fabric_maven(&fabric.intermediary.maven));
         }
-        all_libraries.extend_from_slice(&version.launcher_meta.libraries.common);
-        all_libraries.extend_from_slice(&version.launcher_meta.libraries.client);
+
+        let strip_quilt_asm = fabric_peer.is_some();
+        for lib in &version.launcher_meta.libraries.common {
+            if strip_quilt_asm && Self::is_ow2_asm_library(&lib.name) {
+                continue;
+            }
+            all_libraries.push(lib.clone());
+        }
+        for lib in &version.launcher_meta.libraries.client {
+            if strip_quilt_asm && Self::is_ow2_asm_library(&lib.name) {
+                continue;
+            }
+            all_libraries.push(lib.clone());
+        }
         all_libraries.extend_from_slice(&version.launcher_meta.libraries.server);
         if let Some(dev_libs) = &version.launcher_meta.libraries.development {
             all_libraries.extend_from_slice(dev_libs);
         }
+
+        if let Some(fabric) = fabric_peer {
+            for lib in fabric
+                .launcher_meta
+                .libraries
+                .common
+                .iter()
+                .chain(fabric.launcher_meta.libraries.client.iter())
+            {
+                if Self::is_ow2_asm_library(&lib.name) {
+                    all_libraries.push(Self::quilt_library_from_fabric(lib));
+                }
+            }
+        }
+
+        Ok(all_libraries)
+    }
+
+    pub async fn download_quilt_libraries(
+        &self,
+        minecraft_version: &str,
+        version: &QuiltVersionInfo,
+    ) -> Result<()> {
+        info!("\nDownloading Quilt components...");
+
+        let all_libraries = self
+            .collect_libraries_for_version(minecraft_version, version)
+            .await?;
 
         info!("Found {} components to download", all_libraries.len());
         info!("Downloading with {} concurrent downloads", self.concurrent_downloads);
@@ -238,22 +324,18 @@ impl QuiltLibrariesDownloadService {
         Ok(())
     }
 
-    pub async fn get_library_paths(&self, version: &QuiltVersionInfo) -> Result<Vec<PathBuf>> {
+    pub async fn get_library_paths(
+        &self,
+        minecraft_version: &str,
+        version: &QuiltVersionInfo,
+    ) -> Result<Vec<PathBuf>> {
+        let libraries = self
+            .collect_libraries_for_version(minecraft_version, version)
+            .await?;
         let mut paths = Vec::new();
-
-        self.add_maven_library_path(&version.loader.maven, &mut paths)?;
-        if let Some(mappings) = version.mappings_artifact() {
-            self.add_maven_library_path(&mappings.maven, &mut paths)?;
-        }
-
-        for lib in &version.launcher_meta.libraries.common {
+        for lib in &libraries {
             self.add_library_path(lib, &mut paths)?;
         }
-
-        for lib in &version.launcher_meta.libraries.client {
-            self.add_library_path(lib, &mut paths)?;
-        }
-
         Ok(paths)
     }
 

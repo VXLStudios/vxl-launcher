@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { UninstallContentPayload, ToggleContentPayload, InstallContentPayload, InstallLocalContentPayload, SwitchContentVersionPayload, ToggleModUpdatesPayload, BulkToggleModUpdatesPayload } from '../types/content';
+import type { UninstallContentPayload, ToggleContentPayload, InstallContentPayload, InstallLocalContentPayload, PickAndInstallLocalContentPayload, SwitchContentVersionPayload, ToggleModUpdatesPayload, BulkToggleModUpdatesPayload } from '../types/content';
 
 /**
  * Uninstalls content from a specified profile based on the provided payload.
@@ -89,6 +89,23 @@ export async function installContentToProfile(
  * @param payload - The details of the local content to install, including file paths and content type.
  * @returns A promise that resolves if the installation request is successful, or rejects with an error.
  */
+export async function pickAndInstallLocalContentToProfile(
+  payload: PickAndInstallLocalContentPayload,
+): Promise<void> {
+  try {
+    await invoke<void>('pick_and_install_local_content_to_profile', { payload });
+    console.log(
+      `Successfully requested native picker local content install for profile ${payload.profile_id}, type: ${payload.content_type}`,
+    );
+  } catch (error) {
+    console.error(
+      `Error picking/installing local content for profile ${payload.profile_id}, type: ${payload.content_type}:`,
+      error,
+    );
+    throw error;
+  }
+}
+
 export async function installLocalContentToProfile(
   payload: InstallLocalContentPayload,
 ): Promise<void> {

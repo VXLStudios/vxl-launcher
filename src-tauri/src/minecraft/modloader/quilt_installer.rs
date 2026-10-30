@@ -91,7 +91,7 @@ impl QuiltInstaller {
         );
 
         quilt_libraries_download
-            .download_quilt_libraries(&quilt_version) // Use the determined version
+            .download_quilt_libraries(version_id, &quilt_version)
             .await?;
         info!("Quilt installation completed!");
 
@@ -108,7 +108,7 @@ impl QuiltInstaller {
 
         // Collect library paths for the determined version
         let libraries = quilt_libraries_download
-            .get_library_paths(&quilt_version)
+            .get_library_paths(version_id, &quilt_version)
             .await?;
 
         Ok(libraries)

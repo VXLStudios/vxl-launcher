@@ -1,6 +1,7 @@
 pub mod classpath;
 pub mod forge_arguments;
 pub mod forge_patcher;
+pub mod loader_launch_arguments;
 pub mod game_arguments;
 pub mod jvm_arguments;
 pub mod launcher;

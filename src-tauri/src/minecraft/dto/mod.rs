@@ -1,4 +1,5 @@
 pub mod fabric_meta;
+pub mod loader_version_summary;
 pub mod forge_install_profile;
 pub mod forge_maven_meta;
 pub mod forge_meta;

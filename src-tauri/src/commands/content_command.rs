@@ -15,6 +15,7 @@ use crate::utils::{datapack_utils, profile_utils, resourcepack_utils, shaderpack
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::FilePath;
 use tokio::fs;
 use tokio::sync::Semaphore;
@@ -796,6 +797,85 @@ pub struct InstallLocalContentPayload {
     profile_id: Uuid,
     file_paths: Vec<String>,
     content_type: profile_utils::ContentType, // Added content_type field
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PickAndInstallLocalContentPayload {
+    pub profile_id: Uuid,
+    pub content_type: profile_utils::ContentType,
+}
+
+fn local_import_dialog_config(
+    content_type: profile_utils::ContentType,
+) -> (&'static str, &'static str, &'static [&'static str]) {
+    match content_type {
+        profile_utils::ContentType::Mod => {
+            ("Select mod jars to import", "Java Archives", &["jar", "jar.disabled"][..])
+        }
+        profile_utils::ContentType::ResourcePack => (
+            "Select resource packs to import",
+            "Resource Pack Archives",
+            &["zip", "zip.disabled"][..],
+        ),
+        profile_utils::ContentType::ShaderPack => (
+            "Select shader packs to import",
+            "Shader Pack Archives",
+            &["zip", "zip.disabled"][..],
+        ),
+        profile_utils::ContentType::DataPack => (
+            "Select data packs to import",
+            "Data Pack Archives",
+            &["zip", "zip.disabled"][..],
+        ),
+        profile_utils::ContentType::NoRiskMod => (
+            "Select files to import",
+            "Archives",
+            &["jar", "zip"][..],
+        ),
+    }
+}
+
+#[tauri::command]
+pub async fn pick_and_install_local_content_to_profile(
+    app_handle: tauri::AppHandle,
+    payload: PickAndInstallLocalContentPayload,
+) -> Result<(), CommandError> {
+    let (title, filter_name, extensions) =
+        local_import_dialog_config(payload.content_type.clone());
+    let profile_id = payload.profile_id;
+    let content_type = payload.content_type;
+
+    let picked_paths = tokio::task::spawn_blocking(move || {
+        app_handle
+            .dialog()
+            .file()
+            .set_title(title)
+            .add_filter(filter_name, extensions)
+            .blocking_pick_files()
+    })
+    .await
+    .map_err(|e| CommandError::from(AppError::Other(format!("Dialog task failed: {}", e))))?;
+
+    let Some(file_paths_enums) = picked_paths else {
+        log::info!("User cancelled local content import dialog.");
+        return Ok(());
+    };
+
+    if file_paths_enums.is_empty() {
+        return Ok(());
+    }
+
+    let file_paths: Vec<String> = file_paths_enums
+        .into_iter()
+        .filter_map(|path| path.into_path().ok().map(|p| p.to_string_lossy().into_owned()))
+        .collect();
+
+    install_local_content_to_profile(InstallLocalContentPayload {
+        profile_id,
+        file_paths,
+        content_type,
+    })
+    .await
 }
 
 #[tauri::command]

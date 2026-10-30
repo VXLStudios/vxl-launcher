@@ -25,9 +25,6 @@ pub enum AppError {
     #[error("Task error: {0}")]
     Task(#[from] tokio::task::JoinError),
 
-    #[error("Zip error: {0}")]
-    Zip(#[from] zip::result::ZipError),
-
     #[error("Profile error: {0}")]
     Profile(String),
 

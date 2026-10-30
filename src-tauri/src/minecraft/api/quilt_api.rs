@@ -1,6 +1,8 @@
 use crate::config::{ProjectDirsExt, HTTP_CLIENT, LAUNCHER_DIRECTORY};
 use crate::error::Result;
+use crate::minecraft::dto::loader_version_summary::LoaderVersionSummary;
 use crate::minecraft::dto::quilt_meta::QuiltVersionInfo;
+use crate::minecraft::launch::version::compare_versions;
 use log::{debug, error};
 use serde_json;
 use std::path::PathBuf;
@@ -75,6 +77,25 @@ impl QuiltApi {
         }
     }
 
+    pub fn sort_loader_versions(versions: &mut [QuiltVersionInfo]) {
+        versions.sort_by(|a, b| {
+            b.loader
+                .stable
+                .cmp(&a.loader.stable)
+                .then_with(|| compare_versions(&b.loader.version, &a.loader.version))
+                .then(b.loader.build.cmp(&a.loader.build))
+        });
+    }
+
+    pub async fn get_loader_version_summaries(
+        &self,
+        minecraft_version: &str,
+    ) -> Result<Vec<LoaderVersionSummary>> {
+        let mut versions = self.get_loader_versions(minecraft_version).await?;
+        Self::sort_loader_versions(&mut versions);
+        Ok(versions.into_iter().map(LoaderVersionSummary::from).collect())
+    }
+
     pub async fn get_loader_versions(
         &self,
         minecraft_version: &str,
@@ -127,5 +148,51 @@ impl QuiltApi {
             .ok_or_else(|| {
                 crate::error::AppError::QuiltError("No stable Quilt version found".to_string())
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::minecraft::dto::quilt_meta::{QuiltLauncherMeta, QuiltLibraries, QuiltLoaderVersion, QuiltMainClass, QuiltVersionInfo};
+
+    fn quilt_entry(version: &str, stable: bool, build: i32) -> QuiltVersionInfo {
+        QuiltVersionInfo {
+            loader: QuiltLoaderVersion {
+                separator: ".".to_string(),
+                build,
+                maven: format!("org.quiltmc:quilt-loader:{version}"),
+                version: version.to_string(),
+                stable,
+            },
+            intermediary: None,
+            hashed: None,
+            launcher_meta: QuiltLauncherMeta {
+                version: 1,
+                min_java_version: None,
+                libraries: QuiltLibraries {
+                    client: vec![],
+                    common: vec![],
+                    server: vec![],
+                    development: None,
+                },
+                main_class: QuiltMainClass::String(
+                    "org.quiltmc.loader.impl.launch.knot.KnotClient".to_string(),
+                ),
+            },
+        }
+    }
+
+    #[test]
+    fn sort_loader_versions_puts_stable_and_newer_first() {
+        let mut versions = vec![
+            quilt_entry("0.20.0-beta.1", false, 1),
+            quilt_entry("0.24.0", true, 0),
+            quilt_entry("0.20.0-beta.9", false, 9),
+        ];
+        QuiltApi::sort_loader_versions(&mut versions);
+        assert_eq!(versions[0].loader.version, "0.24.0");
+        assert_eq!(versions[1].loader.version, "0.20.0-beta.9");
+        assert_eq!(versions[2].loader.version, "0.20.0-beta.1");
     }
 }

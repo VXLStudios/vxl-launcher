@@ -43,7 +43,6 @@ import {
   ContentType as BackendContentType,
   type SwitchContentVersionPayload,
 } from "../../../../types/content"; // Added import
-import { type DialogFilter, open } from "@tauri-apps/plugin-dialog"; // Corrected: DialogFile is not exported directly
 import { ThemedSurface } from "../../../ui/ThemedSurface";
 import { useAppDragDropStore } from "../../../../store/appStore"; // Import the store
 import { createPortal } from "react-dom";
@@ -353,88 +352,42 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       return;
     }
 
-    let dialogFilters: DialogFilter[] = [];
-    const currentContentType = contentType; // from component props
+    const currentContentType = contentType;
 
-    switch (currentContentType) {
-      case "Mod":
-        dialogFilters = [
-          { name: "Java Archives", extensions: ["jar", "jar.disabled"] },
-        ];
-        break;
-      case "ResourcePack":
-        dialogFilters = [
-          {
-            name: "Resource Pack Archives",
-            extensions: ["zip", "zip.disabled"],
-          },
-        ];
-        break;
-      case "ShaderPack":
-        dialogFilters = [
-          { name: "Shader Pack Archives", extensions: ["zip", "zip.disabled"] },
-        ];
-        break;
-      case "DataPack":
-        dialogFilters = [
-          { name: "Data Pack Archives", extensions: ["zip", "zip.disabled"] },
-        ];
-        break;
-      default:
-        toast.error(
-          `Local import is not configured for content type: ${currentContentType}`,
-        );
-        return;
+    if (
+      currentContentType !== "Mod" &&
+      currentContentType !== "ResourcePack" &&
+      currentContentType !== "ShaderPack" &&
+      currentContentType !== "DataPack"
+    ) {
+      toast.error(
+        `Local import is not configured for content type: ${currentContentType}`,
+      );
+      return;
     }
 
+    const toastId = toast.loading(`Select ${itemTypeNamePlural.toLowerCase()} to import...`);
     try {
-      // `open` with `multiple: true` and `directory: false` returns `Promise<string[] | null>`
-      // representing absolute paths if no `baseDir` is specified.
-      const selectedPathsArray = await open({
-        multiple: true,
-        directory: false,
-        filters: dialogFilters,
-        title: `Select ${itemTypeNamePlural} to Import for profile: ${profile.name}`,
+      await ContentService.pickAndInstallLocalContentToProfile({
+        profile_id: profile.id,
+        content_type: currentContentType as BackendContentType,
       });
-
-      if (selectedPathsArray && selectedPathsArray.length > 0) {
-        // selectedPathsArray is already string[]
-        const filePaths = selectedPathsArray;
-
-        const toastId = toast.loading(
-          `Importing ${filePaths.length} ${itemTypeNamePlural.toLowerCase()}...`,
-        );
-        try {
-          await ContentService.installLocalContentToProfile({
-            profile_id: profile.id,
-            file_paths: filePaths,
-            content_type: currentContentType as BackendContentType,
-          });
-          toast.success(
-            `${filePaths.length} ${itemTypeNamePlural.toLowerCase()} import process initiated. List will refresh.`,
-            { id: toastId },
-          );
-          fetchData(true);
-          if (onRefreshRequired) {
-            onRefreshRequired();
-          }
-        } catch (importError) {
-          console.error(
-            `Error importing local ${itemTypeNamePlural.toLowerCase()}:`,
-            importError,
-          );
-          toast.error(
-            `Failed to import ${itemTypeNamePlural.toLowerCase()}: ${importError instanceof Error ? importError.message : String(importError)}`,
-            { id: toastId },
-          );
-        }
-      } else {
-        // User cancelled or selected no files
+      toast.dismiss(toastId);
+      toast.success(
+        `${itemTypeNamePlural} import finished. List will refresh.`,
+      );
+      fetchData(true);
+      if (onRefreshRequired) {
+        onRefreshRequired();
       }
-    } catch (dialogError) {
-      console.error("Error opening file dialog:", dialogError);
+    } catch (importError) {
+      console.error(
+        `Error importing local ${itemTypeNamePlural.toLowerCase()}:`,
+        importError,
+      );
       toast.error(
-        `Could not open file dialog: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`,
+        `Failed to import ${itemTypeNamePlural.toLowerCase()}: ${importError instanceof Error ? importError.message : String(importError)}`,
+        { id: toastId },
       );
     }
   };

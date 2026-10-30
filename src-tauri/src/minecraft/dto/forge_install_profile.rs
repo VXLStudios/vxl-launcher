@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::forge_meta::ForgeLibrary;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ForgeInstallProfile {
     #[serde(rename = "hideExtract")]
     pub hide_extract: Option<bool>,
@@ -19,13 +19,13 @@ pub struct ForgeInstallProfile {
     pub libraries: Vec<ForgeLibrary>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ForgeDataEntry {
     pub client: String,
     pub server: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ForgeProcessor {
     pub sides: Option<Vec<String>>,
     pub jar: String,

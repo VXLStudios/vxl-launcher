@@ -8,9 +8,7 @@ use crate::minecraft::api::neo_forge_api::NeoForgeApi;
 use crate::minecraft::api::quilt_api::QuiltApi;
 use crate::minecraft::api::crafatar_api::{CrafatarApiService, GetCrafatarAvatarPayload};
 use crate::minecraft::api::starlight_api::{GetSkinRenderPayload, StarlightApiService};
-use crate::minecraft::dto::fabric_meta::FabricVersionInfo;
 use crate::minecraft::dto::minecraft_profile::MinecraftProfile;
-use crate::minecraft::dto::quilt_meta::QuiltVersionInfo;
 use crate::minecraft::dto::VersionManifest;
 use crate::state::skin_state::MinecraftSkin;
 use crate::state::state_manager::State;
@@ -79,10 +77,11 @@ pub async fn upload_log_to_mclogs_command(log_content: String) -> Result<String,
 #[tauri::command]
 pub async fn get_fabric_loader_versions(
     minecraft_version: String,
-) -> Result<Vec<FabricVersionInfo>, CommandError> {
+) -> Result<Vec<crate::minecraft::dto::loader_version_summary::LoaderVersionSummary>, CommandError>
+{
     let fabric_api = FabricApi::new();
     fabric_api
-        .get_loader_versions(&minecraft_version)
+        .get_loader_version_summaries(&minecraft_version)
         .await
         .map_err(|e| e.into())
 }
@@ -90,10 +89,11 @@ pub async fn get_fabric_loader_versions(
 #[tauri::command]
 pub async fn get_quilt_loader_versions(
     minecraft_version: String,
-) -> Result<Vec<QuiltVersionInfo>, CommandError> {
+) -> Result<Vec<crate::minecraft::dto::loader_version_summary::LoaderVersionSummary>, CommandError>
+{
     let quilt_api = QuiltApi::new();
     quilt_api
-        .get_loader_versions(&minecraft_version)
+        .get_loader_version_summaries(&minecraft_version)
         .await
         .map_err(|e| e.into())
 }

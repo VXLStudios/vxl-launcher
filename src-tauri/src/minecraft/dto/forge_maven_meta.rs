@@ -36,13 +36,17 @@ impl ForgeMavenMetadata {
     }
 
     pub fn get_versions_for_minecraft(&self, minecraft_version: &str) -> Vec<String> {
-        self.versioning
+        let prefix = format!("{minecraft_version}-");
+        let mut versions: Vec<String> = self
+            .versioning
             .versions
             .versions
             .iter()
-            .filter(|v| v.starts_with(minecraft_version))
+            .filter(|v| *v == minecraft_version || v.starts_with(&prefix))
             .cloned()
-            .collect()
+            .collect();
+        versions.reverse();
+        versions
     }
 
     pub fn get_latest_version_for_minecraft(&self, minecraft_version: &str) -> Option<String> {

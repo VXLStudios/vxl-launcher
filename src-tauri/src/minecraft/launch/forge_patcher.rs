@@ -18,6 +18,7 @@ pub struct ForgePatcher {
     root_path: PathBuf,
     event_id: Option<Uuid>,
     profile_id: Option<Uuid>,
+    processor_event_type: EventType,
 }
 
 impl ForgePatcher {
@@ -37,7 +38,13 @@ impl ForgePatcher {
             root_path,
             event_id: None,
             profile_id: None,
+            processor_event_type: EventType::InstallingForge,
         }
+    }
+
+    pub fn with_processor_event_type(mut self, event_type: EventType) -> Self {
+        self.processor_event_type = event_type;
+        self
     }
 
     pub fn with_event_id(mut self, event_id: Uuid) -> Self {
@@ -418,7 +425,7 @@ impl ForgePatcher {
                     state
                         .emit_event(EventPayload {
                             event_id,
-                            event_type: EventType::InstallingForge,
+                            event_type: self.processor_event_type.clone(),
                             target_id: Some(profile_id),
                             message: format!(
                                 "Forge Processor: {} ({}/{})",

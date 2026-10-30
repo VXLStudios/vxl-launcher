@@ -1,6 +1,8 @@
 use crate::config::{ProjectDirsExt, HTTP_CLIENT, LAUNCHER_DIRECTORY};
 use crate::error::Result;
 use crate::minecraft::dto::fabric_meta::FabricVersionInfo;
+use crate::minecraft::dto::loader_version_summary::LoaderVersionSummary;
+use crate::minecraft::launch::version::compare_versions;
 use log::{debug, error};
 use serde_json;
 use std::path::PathBuf;
@@ -77,6 +79,25 @@ impl FabricApi {
         if let Err(e) = Self::fetch_and_cache_versions(&base_url, &minecraft_version, &cache_path).await {
             error!("[BG] Failed to update Fabric cache for {}: {}", minecraft_version, e);
         }
+    }
+
+    pub fn sort_loader_versions(versions: &mut [FabricVersionInfo]) {
+        versions.sort_by(|a, b| {
+            b.loader
+                .stable
+                .cmp(&a.loader.stable)
+                .then_with(|| compare_versions(&b.loader.version, &a.loader.version))
+                .then(b.loader.build.cmp(&a.loader.build))
+        });
+    }
+
+    pub async fn get_loader_version_summaries(
+        &self,
+        minecraft_version: &str,
+    ) -> Result<Vec<LoaderVersionSummary>> {
+        let mut versions = self.get_loader_versions(minecraft_version).await?;
+        Self::sort_loader_versions(&mut versions);
+        Ok(versions.into_iter().map(LoaderVersionSummary::from).collect())
     }
 
     pub async fn get_loader_versions(

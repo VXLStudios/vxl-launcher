@@ -1,5 +1,8 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
+use crate::minecraft::downloads::loader_library_legacy::{
+    legacy_universal_jar_suffix, LoaderMavenFlavor,
+};
 use crate::minecraft::dto::forge_install_profile::ForgeInstallProfile;
 use crate::minecraft::dto::forge_meta::ForgeVersion;
 use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
@@ -128,17 +131,14 @@ impl ForgeLibrariesDownload {
                 let artifact = parts[1];
                 let version = parts[2];
 
-                // Spezialfall für Forge-Bibliotheken
-                let is_forge_lib = group == "net/minecraftforge" && artifact == "forge";
-                let suffix = if is_forge_lib {
+                let suffix =
+                    legacy_universal_jar_suffix(&group, artifact, LoaderMavenFlavor::Forge);
+                if !suffix.is_empty() {
                     info!(
-                        "🔧 Detected Forge library, adding -universal suffix: {}",
+                        "Detected Forge library, adding -universal suffix: {}",
                         library.name
                     );
-                    "-universal"
-                } else {
-                    ""
-                };
+                }
 
                 let maven_path = format!(
                     "{}/{}/{}/{}-{}{}.jar",

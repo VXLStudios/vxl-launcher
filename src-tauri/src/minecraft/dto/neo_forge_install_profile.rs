@@ -1,9 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::neo_forge_meta::NeoForgeLibrary;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NeoForgeInstallProfile {
     #[serde(rename = "hideExtract")]
     pub hide_extract: Option<bool>,
@@ -19,13 +19,13 @@ pub struct NeoForgeInstallProfile {
     pub libraries: Vec<NeoForgeLibrary>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NeoForgeDataEntry {
     pub client: String,
     pub server: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NeoForgeProcessor {
     pub sides: Option<Vec<String>>,
     pub jar: String,

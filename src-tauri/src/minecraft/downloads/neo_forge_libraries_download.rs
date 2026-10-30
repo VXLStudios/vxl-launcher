@@ -1,5 +1,8 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
+use crate::minecraft::downloads::loader_library_legacy::{
+    legacy_universal_jar_suffix, LoaderMavenFlavor,
+};
 use crate::minecraft::dto::neo_forge_install_profile::NeoForgeInstallProfile;
 use crate::minecraft::dto::neo_forge_meta::NeoForgeVersion;
 use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
@@ -128,17 +131,14 @@ impl NeoForgeLibrariesDownload {
                 let artifact = parts[1];
                 let version = parts[2];
 
-                // Spezialfall für Forge-Bibliotheken
-                let is_forge_lib = group == "net/neoforged" && artifact == "neoforge";
-                let suffix = if is_forge_lib {
+                let suffix =
+                    legacy_universal_jar_suffix(&group, artifact, LoaderMavenFlavor::NeoForge);
+                if !suffix.is_empty() {
                     info!(
-                        "🔧 Detected NeoForge library, adding -universal suffix: {}",
+                        "Detected NeoForge library, adding -universal suffix: {}",
                         library.name
                     );
-                    "-universal"
-                } else {
-                    ""
-                };
+                }
 
                 let maven_path = format!(
                     "{}/{}/{}/{}-{}{}.jar",

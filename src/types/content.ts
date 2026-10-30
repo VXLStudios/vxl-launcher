@@ -75,6 +75,12 @@ export interface InstallLocalContentPayload {
   content_type: ContentType; // The type of content being installed
 }
 
+/** Opens a native file picker on the Rust side, then installs the selected files. */
+export interface PickAndInstallLocalContentPayload {
+  profile_id: string;
+  content_type: ContentType;
+}
+
 /**
  * Payload for switching the version of an installed content item.
  * Mirrors the Rust struct `SwitchContentVersionPayload` in `content_command.rs`.
