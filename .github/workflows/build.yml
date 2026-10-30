@@ -312,10 +312,11 @@ jobs:
         if: success() # Only if release creation was successful
         run: |
           echo "Sending notification to PRODUCTION backend for tag ${{ github.ref_name }}"
-          curl -X POST \
+          curl -fsS -X POST \
                -H "Content-Type: application/json" \
                -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
-               ${{ secrets.RELEASE_UPDATE_API_URL }}
+               -d "{\"ref_name\":\"${{ github.ref_name }}\"}" \
+               "${{ secrets.RELEASE_UPDATE_API_URL }}"
         shell: bash
 
   # --- JOB 3: Notify Staging Backend ---
@@ -328,8 +329,9 @@ jobs:
       - name: Notify Staging Backend
         run: |
           echo "Sending notification to STAGING backend for ref ${{ github.ref_name }}"
-          curl -X POST \
+          curl -fsS -X POST \
                -H "Content-Type: application/json" \
                -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
-               ${{ secrets.BETA_UPDATE_API_URL }}
+               -d "{\"ref_name\":\"${{ github.ref_name }}\"}" \
+               "${{ secrets.BETA_UPDATE_API_URL }}"
         shell: bash
