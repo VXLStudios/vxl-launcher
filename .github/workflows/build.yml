@@ -117,6 +117,15 @@ jobs:
           
           echo "Removing conflicting libraries..."
           find squashfs-root -name "*wayland*" -delete
+
+          echo "Fixing AppDir permissions (appimagetool requires world-readable executables)..."
+          chmod -R a+rX squashfs-root
+          if [ -f squashfs-root/AppRun.wrapped ]; then
+            chmod a+rx squashfs-root/AppRun.wrapped
+          fi
+          if [ -f squashfs-root/AppRun ]; then
+            chmod a+rx squashfs-root/AppRun
+          fi
           
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
