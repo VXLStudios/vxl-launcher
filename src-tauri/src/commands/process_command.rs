@@ -131,54 +131,6 @@ pub async fn open_log_window<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-pub async fn open_single_log_window<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    instance_id: String,
-    instance_name: String,
-    profile_id: String,
-    account_name: Option<String>,
-    start_time: f64,
-) -> Result<(), CommandError> {
-    let window_label = format!("single_log_window_{}", instance_id);
-
-    if let Some(window) = app.get_webview_window(&window_label) {
-        window.set_focus().map_err(|e| {
-            CommandError::from(crate::error::AppError::Other(format!(
-                "Failed to focus existing log window {}: {}",
-                window_label, e
-            )))
-        })?;
-        return Ok(());
-    }
-
-    let account_name_str = account_name.as_deref().unwrap_or("");
-    let query_params = format!(
-        "?instanceId={}&instanceName={}&profileId={}&accountName={}&startTime={}",
-        urlencoding::encode(&instance_id),
-        urlencoding::encode(&instance_name),
-        urlencoding::encode(&profile_id),
-        urlencoding::encode(account_name_str),
-        start_time as i64
-    );
-
-    let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        tauri::WebviewUrl::App(
-            format!("single-log-window.html{}", query_params).into(),
-        ),
-    )
-    .title(format!("{} - {}", instance_name, account_name.unwrap_or_else(|| "Logs".to_string())))
-    .inner_size(1000.0, 700.0)
-    .decorations(false)
-    .center()
-    .build()
-    .map_err(|e| CommandError::from(crate::error::AppError::Other(e.to_string())))?;
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn fetch_crash_report(profile_id: Uuid, process_id: Option<Uuid>) -> Result<Option<String>, CommandError> {
     let state = State::get().await?;
     let crash_content = state

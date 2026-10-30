@@ -5,6 +5,7 @@ pub mod download_utils; // Central download utility for robust file downloads
 pub mod download_url; // Allowlisted download URLs for IPC-driven content installs
 pub mod file_utils; // Utilities for file operations like reading archives
 pub mod hash_utils;
+pub mod hook_utils;
 pub mod log_redaction;
 pub mod java_detector; // Java detector to find Java installations
 pub mod mc_utils; // Utilities for Minecraft-related operations

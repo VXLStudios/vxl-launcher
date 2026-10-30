@@ -222,12 +222,14 @@ impl MinecraftLauncher {
         let mut command = match launcher_config.hooks.wrapper {
             Some(wrapper) => {
                 info!("Using wrapper command: {}", wrapper);
-                // Exactly like Modrinth: use the whole wrapper string as command and add java path as arg
-                {
-                    let mut it = Command::new(wrapper);
-                    it.arg(&self.java_path);
-                    it
-                }
+                let (program, mut args) =
+                    crate::utils::hook_utils::parse_hook_line(&wrapper).map_err(|e| {
+                        crate::error::AppError::Other(format!("Invalid wrapper hook: {}", e))
+                    })?;
+                args.push(self.java_path.to_string_lossy().into_owned());
+                let mut it = Command::new(program);
+                it.args(args);
+                it
             }
             None => Command::new(&self.java_path),
         };

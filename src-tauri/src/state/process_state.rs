@@ -1663,17 +1663,7 @@ impl ProcessManager {
         let hook_command = hook.clone();
         let game_dir_clone = game_directory.clone();
         tokio::spawn(async move {
-            let mut cmd = hook_command.split(' ');
-            let command = match cmd.next() {
-                Some(c) => c,
-                None => return,
-            };
-
-            match std::process::Command::new(command)
-                .args(cmd.collect::<Vec<&str>>())
-                .current_dir(&game_dir_clone)
-                .spawn()
-            {
+            match crate::utils::hook_utils::spawn_hook(&hook_command, &game_dir_clone) {
                 Ok(_) => {
                     log::info!(
                         "Post-exit hook spawned successfully for process {}",

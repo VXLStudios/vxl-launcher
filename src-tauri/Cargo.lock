@@ -7410,6 +7410,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "shlex",
  "sqlx",
  "sysinfo 0.34.2",
  "tar",

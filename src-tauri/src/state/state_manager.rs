@@ -77,6 +77,15 @@ impl State {
             .await?;
         log::info!("State::init - ConfigManager post-initialization complete.");
 
+        let launcher_temp = crate::utils::path_security::launcher_temp_dir();
+        if let Err(e) = tokio::fs::create_dir_all(&launcher_temp).await {
+            log::warn!(
+                "Could not create launcher temp directory {:?}: {}",
+                launcher_temp,
+                e
+            );
+        }
+
         crate::state::db::open_or_reopen(&initial_state_arc.db).await?;
         log::info!("State::init - app.db opened.");
 

@@ -724,24 +724,16 @@ pub async fn install_minecraft_version(
         )
         .await?;
 
-        let mut cmd = hook.split(' ');
-        if let Some(command) = cmd.next() {
-            let result = std::process::Command::new(command)
-                .args(cmd.collect::<Vec<&str>>())
-                .current_dir(&game_directory)
-                .spawn()
-                .map_err(|e| AppError::Io(e))?
-                .wait()
-                .map_err(|e| AppError::Io(e))?;
+        let mut child = crate::utils::hook_utils::spawn_hook(hook, &game_directory)?;
+        let result = child.wait().map_err(AppError::Io)?;
 
-            if !result.success() {
-                let error_msg = format!(
-                    "Pre-launch hook failed with exit code: {}",
-                    result.code().unwrap_or(-1)
-                );
-                error!("{}", error_msg);
-                return Err(AppError::Other(error_msg));
-            }
+        if !result.success() {
+            let error_msg = format!(
+                "Pre-launch hook failed with exit code: {}",
+                result.code().unwrap_or(-1)
+            );
+            error!("{}", error_msg);
+            return Err(AppError::Other(error_msg));
         }
         info!("Pre-launch hook executed successfully");
     }

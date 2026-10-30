@@ -111,8 +111,7 @@
             "$APPLOCALDATA/com.vxl.VXLLauncher/**",
             "$APPCONFIG/vxl/**",
             "$APPCONFIG/vxl/VXLLauncher/**",
-            "$APPCONFIG/com.vxl.VXLLauncher/**",
-            "$TEMP/**"
+            "$APPCONFIG/com.vxl.VXLLauncher/**"
           ]
         }
       }

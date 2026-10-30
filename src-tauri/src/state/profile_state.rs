@@ -1158,6 +1158,7 @@ impl ProfileManager {
     async fn insert_mod_from_payload(
         &self,
         payload: &crate::commands::content_command::InstallContentPayload,
+        persist: bool,
     ) -> Result<()> {
         use crate::integrations::unified_mod::ModPlatform;
 
@@ -1210,7 +1211,9 @@ impl ProfileManager {
                 };
                 profile.mods.push(new_mod);
                 drop(profiles);
-                self.save_profile(payload.profile_id).await?;
+                if persist {
+                    self.save_profile(payload.profile_id).await?;
+                }
                 info!(
                     "Successfully added {} mod {} to profile {}",
                     platform_name, display_name_log, payload.profile_id
@@ -1247,7 +1250,7 @@ impl ProfileManager {
             platform_name, display_name_log, payload.profile_id, add_dependencies
         );
 
-        self.insert_mod_from_payload(payload).await?;
+        self.insert_mod_from_payload(payload, true).await?;
 
         if add_dependencies {
             self.install_dependencies_for_mod(payload, display_name_log, platform_name)
@@ -3042,7 +3045,7 @@ impl ProfileManager {
                 source: platform.clone(),
             };
 
-            if let Err(e) = self.insert_mod_from_payload(&dep_payload).await {
+            if let Err(e) = self.insert_mod_from_payload(&dep_payload, false).await {
                 error!(
                     "Failed to install dependency '{}': {}",
                     dependency.project_id, e
@@ -3050,6 +3053,7 @@ impl ProfileManager {
             }
         }
 
+        self.save_profile(profile_id).await?;
         Ok(())
     }
 

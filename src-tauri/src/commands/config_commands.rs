@@ -31,6 +31,16 @@ pub async fn set_launcher_config(config: LauncherConfig) -> Result<LauncherConfi
         config.custom_game_directory = Some(validated);
     }
 
+    if let Some(ref hook) = config.hooks.pre_launch {
+        crate::utils::hook_utils::validate_hook_line(hook)?;
+    }
+    if let Some(ref hook) = config.hooks.wrapper {
+        crate::utils::hook_utils::validate_hook_line(hook)?;
+    }
+    if let Some(ref hook) = config.hooks.post_exit {
+        crate::utils::hook_utils::validate_hook_line(hook)?;
+    }
+
     // Set the entire configuration
     state.config_manager.set_config(config.clone()).await?;
 

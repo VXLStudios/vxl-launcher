@@ -3,6 +3,7 @@ use crate::integrations::unified_mod::{
     get_mod_versions_unified, ModPlatform, UnifiedDependency, UnifiedDependencyType,
     UnifiedModVersionsParams, UnifiedVersion,
 };
+use futures::future::join_all;
 use log::{error, info, warn};
 use std::collections::{HashSet, VecDeque};
 
@@ -75,6 +76,7 @@ pub async fn resolve_required_dependencies_seen(
             continue;
         }
 
+        let mut pending = Vec::new();
         for dependency in batch {
             if dependency.dependency_type != UnifiedDependencyType::Required {
                 continue;
@@ -88,16 +90,32 @@ pub async fn resolve_required_dependencies_seen(
                 continue;
             }
 
-            let params = UnifiedModVersionsParams {
-                source: platform.clone(),
-                project_id: project_id.clone(),
-                loaders: Some(vec![target.loader.clone()]),
-                game_versions: Some(vec![target.game_version.clone()]),
-                limit: None,
-                offset: None,
-            };
+            pending.push(dependency);
+        }
 
-            let versions = match get_mod_versions_unified(params).await {
+        let fetch_jobs = pending.iter().map(|dependency| {
+            let platform = platform.clone();
+            let project_id = dependency.project_id.clone().unwrap();
+            let loader = target.loader.clone();
+            let game_version = target.game_version.clone();
+            async move {
+                let params = UnifiedModVersionsParams {
+                    source: platform,
+                    project_id: project_id.clone(),
+                    loaders: Some(vec![loader]),
+                    game_versions: Some(vec![game_version]),
+                    limit: None,
+                    offset: None,
+                };
+                let result = get_mod_versions_unified(params).await;
+                (project_id, result)
+            }
+        });
+
+        let fetch_results = join_all(fetch_jobs).await;
+
+        for (dependency, (project_id, versions_result)) in pending.into_iter().zip(fetch_results) {
+            let versions = match versions_result {
                 Ok(response) => response.versions,
                 Err(e) => {
                     error!("Failed to get versions for dependency '{}': {}", project_id, e);
