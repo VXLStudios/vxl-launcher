@@ -182,11 +182,10 @@ pub async fn add_content_to_profile(
             .map_err(|e| AppError::Io(e))?;
     }
 
-    // Construct the file path
-    let file_path = target_dir.join(&file_name);
+    let file_path =
+        crate::utils::path_security::join_content_file_path(&target_dir, &file_name)?;
     debug!("Target file path: {}", file_path.display());
 
-    // Download the file
     download_content(&download_url, &file_path, file_hash_sha1).await?;
 
     info!(
@@ -233,6 +232,8 @@ async fn download_content(
     file_path: &Path,
     expected_sha1: Option<String>,
 ) -> Result<()> {
+    crate::utils::download_url::validate_trusted_content_download_url(url)?;
+
     info!(
         "Downloading content from {} to {}",
         url,

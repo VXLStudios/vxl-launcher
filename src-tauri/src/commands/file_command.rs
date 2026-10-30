@@ -281,8 +281,15 @@ pub async fn get_icons_for_archives(
     let mut results_map: HashMap<String, Option<String>> = HashMap::new();
 
     for path_str in archive_paths {
-        let archive_path = Path::new(&path_str);
-        let result = file_utils::find_first_png_in_archive_as_base64_cached(archive_path).await;
+        let archive_path = match path_security::validate_path(&path_str) {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("Skipping archive outside allowed directories {}: {}", path_str, e);
+                results_map.insert(path_str, None);
+                continue;
+            }
+        };
+        let result = file_utils::find_first_png_in_archive_as_base64_cached(&archive_path).await;
 
         match result {
             Ok(base64_icon) => {

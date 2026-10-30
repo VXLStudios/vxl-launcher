@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { cn } from "../../../lib/utils";
+import { sanitizeHtml } from "../../../utils/motd-utils";
 import type {
   ModrinthProjectType,
   ModrinthCategory,
@@ -95,7 +96,7 @@ function FilterOption({
         {typeof icon === "string" ? (
           <span
             className="mr-1.5 h-4 w-4 flex-shrink-0"
-            dangerouslySetInnerHTML={{ __html: icon }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(icon) }}
           />
         ) : icon ? (
           <span className="mr-1.5 flex-shrink-0">{icon}</span>

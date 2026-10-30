@@ -504,6 +504,13 @@ impl ProfileManager {
         Ok(())
     }
 
+    async fn refresh_persisted_hash(&self, profile_id: Uuid) -> Result<()> {
+        let profile = self.get_profile(profile_id).await?;
+        let hash = content_hash(&profile)?;
+        self.persisted.lock().await.insert(profile_id, hash);
+        Ok(())
+    }
+
     // Renamed from load_profiles to avoid conflict, made internal
     async fn load_profiles_internal(&self, path: &PathBuf) -> Result<HashMap<Uuid, Profile>> {
         let mut attempt_count = 0;
@@ -636,7 +643,7 @@ impl ProfileManager {
             // Other functions will use calculate_instance_path_for_profile to resolve it.
             profiles.insert(id, profile);
         }
-        self.save_profiles().await?;
+        self.save_profile(id).await?;
         Ok(id)
     }
 
@@ -654,7 +661,7 @@ impl ProfileManager {
             let mut profiles = self.profiles.write().await;
             profiles.insert(id, profile);
         }
-        self.save_profiles().await?;
+        self.save_profile(id).await?;
         Ok(())
     }
 
@@ -857,7 +864,7 @@ impl ProfileManager {
             {
                 profile.mods.push(mod_info);
                 drop(profiles);
-                self.save_profiles().await?;
+                self.save_profile(profile_id).await?;
                 info!("Successfully added mod to profile {}", profile_id);
                 Ok(())
             } else {
@@ -962,7 +969,7 @@ impl ProfileManager {
             }
 
             if needs_save {
-                self.save_profiles().await?;
+                self.save_profile(profile_id).await?;
                 info!(
                     "Profile saved after adding mod {} ({})",
                     display_name_log, version_log
@@ -1203,7 +1210,7 @@ impl ProfileManager {
                 };
                 profile.mods.push(new_mod);
                 drop(profiles);
-                self.save_profiles().await?;
+                self.save_profile(payload.profile_id).await?;
                 info!(
                     "Successfully added {} mod {} to profile {}",
                     platform_name, display_name_log, payload.profile_id
@@ -1552,7 +1559,10 @@ impl ProfileManager {
                 if mod_to_update.enabled != enabled {
                     mod_to_update.enabled = enabled;
                     drop(profiles);
-                    self.save_profile(profile_id).await?;
+                    self.store
+                        .set_mods_enabled(profile_id, &[mod_id], enabled)
+                        .await?;
+                    self.refresh_persisted_hash(profile_id).await?;
                     info!(
                         "Successfully updated mod {} enabled status in profile {}",
                         mod_id, profile_id
@@ -1630,7 +1640,8 @@ impl ProfileManager {
 
             if final_len < initial_len {
                 drop(profiles);
-                self.save_profiles().await?;
+                self.store.delete_mods(profile_id, &[mod_id]).await?;
+                self.refresh_persisted_hash(profile_id).await?;
                 info!(
                     "Successfully deleted mod {} from profile {}",
                     mod_id, profile_id
@@ -1814,9 +1825,8 @@ impl ProfileManager {
             return Err(AppError::ModNotFoundInProfile { profile_id, mod_id });
         }
 
-        // Save changes to the profile first
         drop(profiles);
-        self.save_profiles().await?;
+        self.save_profile(profile_id).await?;
         info!(
             "Profile {} saved after updating CurseForge mod {}.",
             profile_id, mod_id
@@ -1979,9 +1989,8 @@ impl ProfileManager {
             return Err(AppError::ModNotFoundInProfile { profile_id, mod_id });
         }
 
-        // Save changes to the profile first
         drop(profiles);
-        self.save_profiles().await?;
+        self.save_profile(profile_id).await?;
         info!(
             "Profile {} saved after updating mod {}.",
             profile_id, mod_id
@@ -2756,7 +2765,7 @@ impl ProfileManager {
             
             if changed {
                 drop(profiles);
-                self.save_profiles().await?;
+                self.save_profile(copy_id).await?;
                 info!("Saved forced field updates for copy {}", copy_id);
             }
             
@@ -2873,7 +2882,7 @@ impl ProfileManager {
         }
 
         drop(profiles);
-        self.save_profiles().await?;
+        self.save_profile(profile_id).await?;
 
         info!(
             "Profile {} saved after updating mod with unified version.",

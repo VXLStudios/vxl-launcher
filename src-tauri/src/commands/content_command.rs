@@ -895,8 +895,8 @@ pub async fn install_local_content_to_profile(
                     continue;
                 }
 
-                let file_name = match source_path.file_name() {
-                    Some(name) => name.to_os_string(), // Keep as OsString for PathBuf::join
+                let file_name = match source_path.file_name().and_then(|n| n.to_str()) {
+                    Some(name) => name.to_string(),
                     None => {
                         log::error!(
                             "Could not get file name for path: '{}'. Skipping.",
@@ -906,7 +906,17 @@ pub async fn install_local_content_to_profile(
                         continue;
                     }
                 };
-                let dest_path = target_dir.join(&file_name);
+                let dest_path = match crate::utils::path_security::join_content_file_path(
+                    &target_dir,
+                    &file_name,
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        log::warn!("Invalid destination file name '{}': {}", file_name, e);
+                        files_skipped_pre_copy += 1;
+                        continue;
+                    }
+                };
 
                 if dest_path.exists() {
                     log::warn!(

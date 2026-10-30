@@ -19,6 +19,7 @@ export function GlobalCrashReportModal() {
   const { isCrashModalOpen, crashData, closeCrashModal } = useCrashModalStore();
   const [profileName, setProfileName] = useState<string>("");
   const [mclogsUrl, setMclogsUrl] = useState<string | null>(null);
+  const [pendingLogContent, setPendingLogContent] = useState<string | null>(null);
   const [noriskReportSubmitted, setNoriskReportSubmitted] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [displayedCrashReportContent, setDisplayedCrashReportContent] = useState<
@@ -236,6 +237,8 @@ export function GlobalCrashReportModal() {
           throw new Error("No log content found to upload.");
         }
 
+        setPendingLogContent(combinedLogContent);
+
         toast.loading("Uploading to mclogs.com...", { id: mainToastId });
         currentMclogsUrl = await uploadLogToMclogs(combinedLogContent);
         setMclogsUrl(currentMclogsUrl);
@@ -244,6 +247,7 @@ export function GlobalCrashReportModal() {
       if (currentMclogsUrl && !noriskReportSubmitted) {
         toast.loading("Submitting crash report to NoRisk...", { id: mainToastId });
         const crashReportPayload: CrashlogDto = {
+          log_content: pendingLogContent ?? undefined,
           mcLogsUrl: currentMclogsUrl,
           metadata: crashData.process_metadata!,
         };

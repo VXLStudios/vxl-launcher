@@ -24,6 +24,13 @@ pub async fn set_launcher_config(config: LauncherConfig) -> Result<LauncherConfi
         ))));
     }
 
+    let mut config = config;
+    if let Some(ref custom_dir) = config.custom_game_directory {
+        let validated =
+            crate::utils::path_security::validate_custom_game_directory(custom_dir)?;
+        config.custom_game_directory = Some(validated);
+    }
+
     // Set the entire configuration
     state.config_manager.set_config(config.clone()).await?;
 

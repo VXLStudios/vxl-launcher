@@ -2,11 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": [
-    "main",
-    "log_window_*",
-    "updater"
-  ],
+  "windows": ["main", "updater"],
   "permissions": [
     "core:default",
     "opener:default",
@@ -48,10 +44,7 @@
         { "path": "$APPCACHE/vxl/**" },
         { "path": "$APPCACHE/com.vxl.VXLLauncher/**" },
         { "path": "$APPLOG/vxl/**" },
-        { "path": "$APPLOG/com.vxl.VXLLauncher/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$TEMP/**" }
+        { "path": "$APPLOG/com.vxl.VXLLauncher/**" }
       ]
     },
     {
@@ -62,9 +55,7 @@
         { "path": "$APPCONFIG/vxl/**" },
         { "path": "$APPCONFIG/com.vxl.VXLLauncher/**" },
         { "path": "$APPLOCALDATA/vxl/**" },
-        { "path": "$APPLOCALDATA/com.vxl.VXLLauncher/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DOWNLOAD/**" }
+        { "path": "$APPLOCALDATA/com.vxl.VXLLauncher/**" }
       ]
     }
   ]

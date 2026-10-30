@@ -2168,33 +2168,28 @@ pub async fn add_profile_symlink(params: AddSymlinkParams) -> Result<(), Command
         .get_profile_instance_path(params.profile_id)
         .await?;
     
-    // Normalize relative_path by converting to PathBuf (handles forward/backslash normalization)
-    // Split by '/' and push segments individually to ensure platform-appropriate separators
-    let mut normalized_relative = PathBuf::new();
-    for segment in params.relative_path.split('/') {
-        if !segment.is_empty() {
-            normalized_relative.push(segment);
-        }
-    }
-    
-    let link_path = instance_path.join(&normalized_relative);
+    let link_path =
+        crate::utils::path_security::join_relative_path(&instance_path, &params.relative_path)
+            .map_err(CommandError::from)?;
+
     let target_path = PathBuf::from(&params.external_path);
-    
-    // Check if target exists
+
     if !target_path.exists() {
         return Err(CommandError::from(AppError::Other(format!(
             "Target path does not exist: {}",
             params.external_path
         ))));
     }
-    
+
     let is_dir = target_path.is_dir();
-    
-    // Create parent directories if needed
+
     if let Some(parent) = link_path.parent() {
         tokio::fs::create_dir_all(parent).await
             .map_err(|e| CommandError::from(AppError::Io(e)))?;
     }
+
+    crate::utils::path_security::validate_path_under_base(&link_path, &instance_path)
+        .map_err(CommandError::from)?;
     
     // Remove existing link/file if it exists
     if link_path.exists() {
@@ -2202,7 +2197,7 @@ pub async fn add_profile_symlink(params: AddSymlinkParams) -> Result<(), Command
             symlink_utils::remove_symlink(&link_path).await?;
         } else {
             // Backup existing content
-            let backup_path = instance_path.join(&normalized_relative).with_extension("backup");
+            let backup_path = link_path.with_extension("backup");
             tokio::fs::rename(&link_path, &backup_path).await
                 .map_err(|e| CommandError::from(AppError::Io(e)))?;
             info!("Backed up existing content to {:?}", backup_path);
@@ -2232,15 +2227,19 @@ pub async fn remove_profile_symlink(
         .get_profile_instance_path(profile_id)
         .await?;
     
-    let link_path = instance_path.join(&relative_path);
-    
+    let link_path =
+        crate::utils::path_security::join_relative_path(&instance_path, &relative_path)
+            .map_err(CommandError::from)?;
+    crate::utils::path_security::validate_path_under_base(&link_path, &instance_path)
+        .map_err(CommandError::from)?;
+
     if !link_path.exists() {
         return Err(CommandError::from(AppError::Other(format!(
             "Symlink does not exist: {}",
             relative_path
         ))));
     }
-    
+
     if !symlink_utils::is_symlink(&link_path).await? {
         return Err(CommandError::from(AppError::Other(format!(
             "Path is not a symlink: {}",

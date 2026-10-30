@@ -286,6 +286,8 @@ impl ModDownloadService {
         target_path: &PathBuf,
         expected_sha1: Option<&str>,
     ) -> Result<()> {
+        crate::utils::download_url::validate_trusted_content_download_url(url)?;
+
         // Use the new centralized download utility with SHA1 verification
         let mut config = DownloadConfig::new()
             .with_streaming(true)  // Mods can be large files

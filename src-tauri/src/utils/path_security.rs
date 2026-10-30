@@ -3,6 +3,11 @@ use crate::error::{AppError, Result};
 use crate::state::profile_state::default_profile_path;
 use std::path::{Component, Path, PathBuf};
 
+/// Launcher-owned temp directory (not the system-wide temp folder).
+pub fn launcher_temp_dir() -> PathBuf {
+    LAUNCHER_DIRECTORY.data_dir().join("temp")
+}
+
 /// Returns filesystem roots the launcher is allowed to read/write via IPC path commands.
 pub fn allowed_roots() -> Vec<PathBuf> {
     let mut roots = vec![
@@ -12,13 +17,17 @@ pub fn allowed_roots() -> Vec<PathBuf> {
         LAUNCHER_DIRECTORY.meta_dir(),
         LAUNCHER_DIRECTORY.file_sync_hub_dir(),
         default_profile_path(),
-        std::env::temp_dir(),
+        launcher_temp_dir(),
     ];
 
     if let Ok(guard) = crate::config::CUSTOM_GAME_DIR_CACHE.read() {
         if let Some(Some(custom_dir)) = guard.as_ref() {
-            roots.push(custom_dir.clone());
-            roots.push(custom_dir.join("profiles"));
+            if let Ok(canonical) = std::fs::canonicalize(custom_dir) {
+                if is_safe_custom_game_directory(&canonical) {
+                    roots.push(canonical.clone());
+                    roots.push(canonical.join("profiles"));
+                }
+            }
         }
     }
 
@@ -157,6 +166,70 @@ pub fn validate_path_under_base(path: impl AsRef<Path>, base: impl AsRef<Path>) 
 pub fn join_validated_segment(base: impl AsRef<Path>, segment: &str) -> Result<PathBuf> {
     let segment = validate_relative_segment(segment)?;
     let joined = base.as_ref().join(segment);
+    validate_path_under_base(&joined, base)
+}
+
+/// Rejects filesystem roots and other paths that would make IPC path checks too broad.
+pub fn is_safe_custom_game_directory(path: &Path) -> bool {
+    if !path.is_absolute() {
+        return false;
+    }
+
+    #[cfg(windows)]
+    {
+        let components: Vec<_> = path.components().collect();
+        if components.len() <= 1 {
+            return false;
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        if path.parent().is_none() || path == Path::new("/") {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Validates a user-supplied custom game directory before it is stored in config.
+pub fn validate_custom_game_directory(path: &Path) -> Result<PathBuf> {
+    if !path.is_absolute() {
+        return Err(AppError::Other(
+            "Custom game directory must be an absolute path".to_string(),
+        ));
+    }
+    let canonical = std::fs::canonicalize(path).map_err(AppError::Io)?;
+    if !is_safe_custom_game_directory(&canonical) {
+        return Err(AppError::Other(
+            "Custom game directory cannot be a filesystem root".to_string(),
+        ));
+    }
+    Ok(canonical)
+}
+
+/// Keeps only the final path segment and validates it (for download file names from IPC).
+pub fn resolve_single_file_name(file_name: &str) -> Result<String> {
+    let path = Path::new(file_name);
+    let base = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| AppError::Other("Invalid file name".to_string()))?;
+    validate_relative_segment(base)
+}
+
+/// Joins a validated file name onto `target_dir` and ensures the result stays under it.
+pub fn join_content_file_path(target_dir: impl AsRef<Path>, file_name: &str) -> Result<PathBuf> {
+    let segment = resolve_single_file_name(file_name)?;
+    let joined = target_dir.as_ref().join(&segment);
+    validate_path_under_base(&joined, target_dir)
+}
+
+/// Joins a zip/tar entry onto `base` after zip-slip validation.
+pub fn join_archive_entry(base: impl AsRef<Path>, entry_name: &str) -> Result<PathBuf> {
+    validate_zip_entry_path(entry_name)?;
+    let joined = base.as_ref().join(entry_name);
     validate_path_under_base(&joined, base)
 }
 

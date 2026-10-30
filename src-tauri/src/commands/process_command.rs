@@ -200,13 +200,10 @@ pub async fn set_discord_state(
 
 #[tauri::command]
 pub async fn submit_crash_log_command(payload: CrashlogDto) -> Result<(), CommandError> {
-    log::info!(
-        "Executing submit_crash_log_command with mcLogsUrl: {}",
-        payload.mcLogsUrl
-    );
+    log::info!("Executing submit_crash_log_command");
 
-    // Sanitize the crash log content by removing sensitive data
-    let sanitized_content = sanitize_crash_log(&payload.mcLogsUrl).await?;
+    let raw_content = resolve_crash_log_content(&payload).await?;
+    let sanitized_content = sanitize_crash_log_text(raw_content)?;
 
     // Prepare the payload for mclo.gs API
     let mclog_payload = json!({
@@ -240,30 +237,51 @@ pub async fn submit_crash_log_command(payload: CrashlogDto) -> Result<(), Comman
     Ok(())
 }
 
-/// Sanitizes crash log content by removing sensitive information
-async fn sanitize_crash_log(log_url: &str) -> Result<String, CommandError> {
-    // Fetch the crash log content from the provided URL
-    let client = reqwest::Client::new();
-    let response = client
-        .get(log_url)
-        .send()
-        .await
-        .map_err(|e| {
-            CommandError::from(crate::error::AppError::Other(format!(
-                "Failed to fetch crash log from URL: {}",
-                e
-            )))
-        })?;
+async fn resolve_crash_log_content(payload: &CrashlogDto) -> Result<String, CommandError> {
+    if let Some(content) = payload
+        .log_content
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        return Ok(content.to_string());
+    }
 
-    let mut content = response
-        .text()
-        .await
-        .map_err(|e| {
-            CommandError::from(crate::error::AppError::Other(format!(
-                "Failed to read crash log content: {}",
-                e
-            )))
-        })?;
+    let Some(url) = payload
+        .mc_logs_url
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    else {
+        return Err(CommandError::from(crate::error::AppError::Other(
+            "Crash log submission requires log_content or an mclo.gs URL".to_string(),
+        )));
+    };
+
+    if !crate::utils::download_url::is_allowed_mclogs_fetch_url(url) {
+        return Err(CommandError::from(crate::error::AppError::Other(
+            "Only mclo.gs log URLs may be fetched by the launcher".to_string(),
+        )));
+    }
+
+    let client = reqwest::Client::new();
+    let response = client.get(url).send().await.map_err(|e| {
+        CommandError::from(crate::error::AppError::Other(format!(
+            "Failed to fetch crash log from URL: {}",
+            e
+        )))
+    })?;
+
+    response.text().await.map_err(|e| {
+        CommandError::from(crate::error::AppError::Other(format!(
+            "Failed to read crash log content: {}",
+            e
+        )))
+    })
+}
+
+/// Sanitizes crash log content by removing sensitive information
+fn sanitize_crash_log_text(mut content: String) -> Result<String, CommandError> {
 
     // First, extract and store all domains/IPs that appear in "Connecting to" lines
     // so we can redact them everywhere they appear in the log

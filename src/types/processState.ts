@@ -38,6 +38,9 @@ export interface ProcessMetadata {
  * Corresponds to the Rust struct `CrashlogDto`.
  */
 export interface CrashlogDto {
-  mcLogsUrl: string;
+  /** Preferred: log body sent directly (no server-side URL fetch). */
+  log_content?: string | null;
+  /** Legacy: only mclo.gs URLs may be fetched when log_content is omitted. */
+  mcLogsUrl?: string | null;
   metadata: ProcessMetadata | null;
 }

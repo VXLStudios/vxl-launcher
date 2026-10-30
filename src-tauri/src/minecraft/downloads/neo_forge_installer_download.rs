@@ -275,8 +275,9 @@ impl NeoForgeInstallerDownloadService {
             if file_name.starts_with("data/") && !file_name.ends_with('/') {
                 info!("\nFound data file: {}", file_name);
 
-                // Behalte den data/ Ordner im Pfad
-                let target_path = installer_dir.join(file_name);
+                let target_path =
+                    crate::utils::path_security::join_archive_entry(installer_dir, file_name)
+                        .map_err(|e| AppError::Download(e.to_string()))?;
 
                 info!("Target path: {}", target_path.display());
                 info!(
@@ -357,9 +358,10 @@ impl NeoForgeInstallerDownloadService {
             if file_name.starts_with("maven/") && !file_name.ends_with('/') {
                 info!("\n📄 Found maven file: {}", file_name);
 
-                // Entferne den maven/ Prefix und behalte den Rest des Pfads
                 let relative_path = file_name.trim_start_matches("maven/");
-                let target_path = libraries_dir.join(relative_path);
+                let target_path =
+                    crate::utils::path_security::join_archive_entry(libraries_dir, relative_path)
+                        .map_err(|e| AppError::Download(e.to_string()))?;
 
                 info!("  📍 Target path: {}", target_path.display());
                 info!(
@@ -446,9 +448,12 @@ impl NeoForgeInstallerDownloadService {
             if file_name.ends_with(".jar") {
                 info!("\n📄 Found JAR file: {}", file_name);
 
-                // Extrahiere nur den Dateinamen ohne Pfad
-                let file_name = file_name.split('/').last().unwrap();
-                let target_path = installer_dir.join(file_name);
+                let jar_name = file_name.split('/').last().unwrap();
+                let target_path = crate::utils::path_security::join_content_file_path(
+                    installer_dir,
+                    jar_name,
+                )
+                .map_err(|e| AppError::Download(e.to_string()))?;
 
                 info!("  📍 Target path: {}", target_path.display());
 

@@ -48,63 +48,28 @@ pub async fn create_symlink(target_path: &Path, link_path: &Path, is_dir: bool) 
 
 #[cfg(windows)]
 async fn create_junction(target: &Path, junction: &Path) -> Result<()> {
-    use std::process::Command;
-    
-    // Convert paths to absolute paths
     let target_abs = tokio::fs::canonicalize(target).await
         .map_err(|e| AppError::Other(format!("Failed to resolve target path: {}", e)))?;
-    
-    // Normalize junction path to ensure proper separators on Windows
-    // PathBuf normalization should handle this, but we ensure it's canonicalized
-    let junction_normalized = if junction.is_absolute() {
-        tokio::fs::canonicalize(junction).await
-            .unwrap_or_else(|_| junction.to_path_buf())
-    } else {
-        junction.to_path_buf()
-    };
-    
-    // Convert to string with proper Windows separators
-    // to_string_lossy() should produce backslashes on Windows, but we ensure it's normalized
-    let junction_str = junction_normalized.to_string_lossy().replace('/', "\\");
-    let target_str = target_abs.to_string_lossy().replace('/', "\\");
-    
-    // Log the full command before execution
-    info!("Executing mklink command: mklink /J \"{}\" \"{}\"", junction_str, target_str);
-    
-    // Use mklink /J which creates a junction point (no admin rights needed)
-    let output = tokio::task::spawn_blocking({
-        let junction_str = junction_str.clone();
-        let target_str = target_str.clone();
-        move || {
-            Command::new("cmd")
-                .args(&[
-                    "/C",
-                    "mklink",
-                    "/J",
-                    &junction_str,
-                    &target_str,
-                ])
-                .output()
-        }
-    })
-    .await
-    .map_err(|e| AppError::Other(format!("Join error: {}", e)))?
-    .map_err(|e| AppError::Other(format!("Failed to execute mklink command: {}", e)))?;
 
-    if !output.status.success() {
-        let stdout_msg = String::from_utf8_lossy(&output.stdout);
-        let stderr_msg = String::from_utf8_lossy(&output.stderr);
-        error!(
-            "mklink command failed. Junction: {:?}, Target: {:?}, Stdout: {}, Stderr: {}",
-            junction_normalized, target_abs, stdout_msg, stderr_msg
-        );
-        return Err(AppError::Other(format!(
-            "Failed to create junction point: {}",
-            if !stderr_msg.is_empty() { stderr_msg } else { stdout_msg }
-        )));
+    if let Some(parent) = junction.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(AppError::Io)?;
     }
 
-    info!("Successfully created junction point: {:?} -> {:?}", junction_normalized, target_abs);
+    let junction_path = junction.to_path_buf();
+    let target_for_junction = target_abs.clone();
+
+    tokio::task::spawn_blocking(move || {
+        junction::create(&target_for_junction, &junction_path).map_err(|e| {
+            AppError::Other(format!("Failed to create junction point: {}", e))
+        })
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("Join error: {}", e)))??;
+
+    info!(
+        "Successfully created junction point: {:?} -> {:?}",
+        junction, target_abs
+    );
     Ok(())
 }
 

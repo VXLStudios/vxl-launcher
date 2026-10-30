@@ -11,7 +11,7 @@ use log::{debug, error, info};
 use reqwest;
 use std::fs::File;
 use std::io::Cursor;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tar::Archive;
@@ -24,6 +24,67 @@ const DEFAULT_CONCURRENT_EXTRACTIONS: usize = 4;
 
 // Legacy Java component that requires x86_64 Java on ARM64 Macs
 const LEGACY_JAVA_COMPONENT: &str = "jre-legacy";
+
+fn extract_java_tar_gz(archive_path: &Path, target_dir: &Path) -> Result<()> {
+    use std::fs::File;
+    let file = File::open(archive_path).map_err(AppError::Io)?;
+    let gz = GzDecoder::new(file);
+    let mut archive = Archive::new(gz);
+
+    let mut root_dir = String::new();
+    for entry in archive.entries().map_err(AppError::Io)? {
+        let entry = entry.map_err(AppError::Io)?;
+        let path = entry.path().map_err(AppError::Io)?;
+        if path.components().count() == 1 {
+            if let Some(name) = path
+                .components()
+                .next()
+                .and_then(|c| c.as_os_str().to_str())
+            {
+                root_dir = name.to_string();
+                break;
+            }
+        }
+    }
+
+    let file = File::open(archive_path).map_err(AppError::Io)?;
+    let gz = GzDecoder::new(file);
+    let mut archive = Archive::new(gz);
+
+    for entry_result in archive.entries().map_err(AppError::Io)? {
+        let mut entry = entry_result.map_err(AppError::Io)?;
+        let path = entry.path().map_err(AppError::Io)?.to_path_buf();
+
+        if path.to_string_lossy() == root_dir {
+            continue;
+        }
+
+        let relative_path = path
+            .strip_prefix(&root_dir)
+            .map_err(|_| {
+                AppError::JavaDownload(format!(
+                    "Unexpected tar entry outside root: {}",
+                    path.display()
+                ))
+            })?
+            .to_path_buf();
+
+        if relative_path.as_os_str().is_empty() {
+            continue;
+        }
+
+        let relative_str = relative_path.to_string_lossy().replace('\\', "/");
+        let target_path = crate::utils::path_security::join_archive_entry(target_dir, &relative_str)?;
+
+        if let Some(parent) = target_path.parent() {
+            std::fs::create_dir_all(parent).map_err(AppError::Io)?;
+        }
+
+        entry.unpack(&target_path).map_err(AppError::Io)?;
+    }
+
+    Ok(())
+}
 
 pub struct JavaDownloadService {
     base_path: PathBuf,
@@ -247,7 +308,16 @@ impl JavaDownloadService {
                         continue;
                     }
 
-                    let final_dest_path = target_dir.join(relative_path_str);
+                    let final_dest_path = match crate::utils::path_security::join_archive_entry(
+                        &target_dir,
+                        &relative_path_str,
+                    ) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            error!("Skipping unsafe Java zip entry {:?}: {}", relative_path_str, e);
+                            continue;
+                        }
+                    };
 
                     let task_archive_path = archive_path.clone();
                     let task_io_semaphore = io_semaphore.clone();
@@ -413,69 +483,11 @@ impl JavaDownloadService {
                 }
             }
             OperatingSystem::LINUX | OperatingSystem::OSX => {
-                // Read the entire archive into memory
-                let bytes = fs::read(archive_path).await?;
-                let cursor = Cursor::new(bytes);
-                let gz = GzDecoder::new(cursor);
-                let mut archive = Archive::new(gz);
-
-                // First, find the root directory name
-                let mut root_dir = String::new();
-
-                for entry in archive.entries()? {
-                    let entry = entry?;
-                    let path = entry.path()?;
-
-                    if path.components().count() == 1 {
-                        if let Some(name) = path
-                            .components()
-                            .next()
-                            .and_then(|c| c.as_os_str().to_str())
-                        {
-                            root_dir = name.to_string();
-                            break;
-                        }
-                    }
-                }
-
-                // Re-read the archive since we consumed it
-                let bytes = fs::read(archive_path).await?;
-                let cursor = Cursor::new(bytes);
-                let gz = GzDecoder::new(cursor);
-                let mut archive = Archive::new(gz);
-
-                // Process entries, skipping the root directory
-                for entry_result in archive.entries()? {
-                    let mut entry = entry_result?;
-                    let path = entry.path()?.to_path_buf();
-
-                    // Skip the root directory itself
-                    if path.to_string_lossy() == root_dir {
-                        continue;
-                    }
-
-                    // Create the path without the root directory
-                    let relative_path = if let Ok(rel_path) = path.strip_prefix(&root_dir) {
-                        rel_path.to_path_buf()
-                    } else {
-                        // If stripping fails, just use the original path
-                        path
-                    };
-
-                    // Skip empty paths
-                    if relative_path.as_os_str().is_empty() {
-                        continue;
-                    }
-
-                    let target_path = target_dir.join(relative_path);
-
-                    // Create parent directories
-                    if let Some(parent) = target_path.parent() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-
-                    entry.unpack(&target_path)?;
-                }
+                let archive_path = archive_path.to_path_buf();
+                let target_dir = target_dir.to_path_buf();
+                tokio::task::spawn_blocking(move || extract_java_tar_gz(&archive_path, &target_dir))
+                    .await
+                    .map_err(|e| AppError::JavaDownload(format!("Join error: {}", e)))??;
             }
             _ => return Err(AppError::JavaDownload("Unsupported OS".to_string())),
         }

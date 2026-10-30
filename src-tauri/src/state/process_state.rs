@@ -75,7 +75,12 @@ pub enum ProcessState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrashlogDto {
-    pub mcLogsUrl: String,
+    /// Preferred: log body supplied by the frontend (no server-side fetch).
+    #[serde(default, alias = "logContent")]
+    pub log_content: Option<String>,
+    /// Legacy: only https://mclo.gs/ or https://api.mclo.gs/ URLs are fetched.
+    #[serde(default, alias = "mcLogsUrl")]
+    pub mc_logs_url: Option<String>,
     pub metadata: Option<ProcessMetadata>,
 }
 
