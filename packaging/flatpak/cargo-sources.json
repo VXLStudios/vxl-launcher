@@ -3772,6 +3772,19 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/junction/junction-1.4.2.crate",
+        "sha256": "8cfc352a66ba903c23239ef51e809508b6fc2b0f90e3476ac7a9ff47e863ae95",
+        "dest": "cargo/vendor/junction-1.4.2"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"8cfc352a66ba903c23239ef51e809508b6fc2b0f90e3476ac7a9ff47e863ae95\", \"files\": {}}",
+        "dest": "cargo/vendor/junction-1.4.2",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/keyboard-types/keyboard-types-0.7.0.crate",
         "sha256": "b750dcadc39a09dbadd74e118f6dd6598df77fa01df0cfcdc52c28dece74528a",
         "dest": "cargo/vendor/keyboard-types-0.7.0"
