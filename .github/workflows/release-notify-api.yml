@@ -1,0 +1,67 @@
+name: Re-notify release API
+
+# Re-run backend manifest ingest when GitHub release/assets already exist but API failures (e.g. backend down, bad curl, etc.).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.2.5). Empty = latest published GitHub release."
+        required: false
+        type: string
+      channel:
+        description: "Which backend endpoint to call"
+        required: true
+        type: choice
+        default: production
+        options:
+          - production
+          - beta
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          INPUT_TAG="${{ inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+            if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+              echo "No GitHub release found. Pass tag explicitly." >&2
+              exit 1
+            fi
+            echo "Using latest GitHub release tag: $TAG"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm GitHub release exists
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh release view "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}"
+
+      - name: Notify production backend
+        if: inputs.channel == 'production'
+        run: |
+          echo "Ingesting ${{ steps.tag.outputs.tag }} via production update URL"
+          curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+            -d "{\"ref_name\":\"${{ steps.tag.outputs.tag }}\"}" \
+            "${{ secrets.RELEASE_UPDATE_API_URL }}"
+
+      - name: Notify beta backend
+        if: inputs.channel == 'beta'
+        run: |
+          echo "Ingesting ${{ steps.tag.outputs.tag }} via beta update URL"
+          curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+            -d "{\"ref_name\":\"${{ steps.tag.outputs.tag }}\"}" \
+            "${{ secrets.BETA_UPDATE_API_URL }}"
